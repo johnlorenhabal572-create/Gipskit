@@ -1,0 +1,6 @@
+{
+  "name": "Local Marketplace",
+  "description": "A comprehensive e-commerce and ordering system with real Gmail verification code authentication, MongoDB Atlas support, order management, and administrative control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
