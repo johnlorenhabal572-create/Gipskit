@@ -55,8 +55,8 @@ const ManageInventory = () => {
         fetchInventory(),
         fetchInventoryLogs(undefined, 100)
       ]);
-      setInventory(itemsData);
-      setLogs(logsData);
+      setInventory(Array.isArray(itemsData) ? itemsData : []);
+      setLogs(Array.isArray(logsData) ? logsData : []);
     } catch (err: any) {
       console.error('Error loading inventory data:', err);
     } finally {
@@ -85,7 +85,11 @@ const ManageInventory = () => {
         stableQuantity: newItem.stableQuantity || 0,
         lowStockThreshold: newItem.lowStockThreshold || 10
       });
-      setInventory(prev => [...prev, created]);
+      setInventory(prev => {
+        // Prevent duplicate items in state
+        const exists = prev.some(i => i.id === created.id);
+        return exists ? prev.map(i => i.id === created.id ? created : i) : [...prev, created];
+      });
       setNewItem({ name: '', quantity: 0, unit: 'pcs', stableQuantity: 0, lowStockThreshold: 10 });
       setIsAdding(false);
       // Refresh logs
@@ -338,10 +342,11 @@ const ManageInventory = () => {
                     )}
                   </AnimatePresence>
 
-                  {filteredInventory.map((item) => {
+                  {filteredInventory.map((item, idx) => {
                     const isLow = item.quantity <= (item.lowStockThreshold || 10);
+                    const itemKey = item.id ? `inv-row-${item.id}` : `inv-row-idx-${idx}`;
                     return (
-                      <tr key={item.id} className="group hover:bg-gray-50/50 transition-colors">
+                      <tr key={itemKey} className="group hover:bg-gray-50/50 transition-colors">
                         <td className="p-6">
                           {editingId === item.id ? (
                             <input 
@@ -545,10 +550,11 @@ const ManageInventory = () => {
                 )}
               </AnimatePresence>
 
-              {filteredInventory.map((item) => {
+              {filteredInventory.map((item, idx) => {
                 const isLow = item.quantity <= (item.lowStockThreshold || 10);
+                const cardKey = item.id ? `inv-card-${item.id}` : `inv-card-idx-${idx}`;
                 return (
-                  <div key={item.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+                  <div key={cardKey} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
                     {editingId === item.id ? (
                       <div className="space-y-4">
                         <input 
@@ -675,11 +681,12 @@ const ManageInventory = () => {
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {logs.map((log) => {
+                {logs.map((log, logIdx) => {
                   const isPositive = log.quantityChange > 0;
                   const isZero = log.quantityChange === 0;
+                  const logKey = log.id ? `log-${log.id}-${logIdx}` : `log-idx-${logIdx}`;
                   return (
-                    <div key={log.id || log._id} className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-gray-50/50 rounded-xl px-2 transition-colors">
+                    <div key={logKey} className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-gray-50/50 rounded-xl px-2 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                           log.type === 'stock-in' ? 'bg-green-50 text-green-600' :

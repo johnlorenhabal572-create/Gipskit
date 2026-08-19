@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchProducts, createProduct, editProduct, removeProduct, CATEGORIES } from '../api/productService';
-import { getInventory } from '../api/inventoryService';
+import { fetchInventory, getInventory } from '../api/inventoryService';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Edit2, X, Link as LinkIcon, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
 import { IMAGES } from '../constants/images';
@@ -26,14 +26,19 @@ const ManageMenu = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await fetchProducts();
-      setProducts(data);
+      const [prodsData, invData] = await Promise.all([
+        fetchProducts(),
+        fetchInventory()
+      ]);
+      const uniqueProds = Array.from(new Map((prodsData || []).map((item: any) => [item.id, item])).values());
+      const uniqueInv = Array.from(new Map((invData || []).map((item: any) => [item.id, item])).values());
+      setProducts(uniqueProds);
+      setInventory(uniqueInv);
     } catch (err: any) {
-      console.error('Error loading products:', err);
+      console.error('Error loading menu & inventory:', err);
     } finally {
       setIsLoading(false);
     }
-    setInventory(getInventory());
   };
 
   useEffect(() => {
@@ -129,8 +134,32 @@ const ManageMenu = () => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, image: reader.result as string });
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.82);
+          setFormData({ ...formData, image: compressed });
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -253,8 +282,8 @@ const ManageMenu = () => {
                         className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-primary text-sm bg-white"
                       >
                         <option value="">No Link (Manual Stock)</option>
-                        {inventory.map(item => (
-                          <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
+                        {inventory.map((item, idx) => (
+                          <option key={item.id ? `opt-${item.id}` : `opt-${idx}`} value={item.id}>{item.name} ({item.unit})</option>
                         ))}
                       </select>
                     </div>
@@ -325,8 +354,8 @@ const ManageMenu = () => {
 
         {/* Menu Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((product) => (
-            <div key={product.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden group">
+          {products.map((product, idx) => (
+            <div key={product.id ? `menu-prod-${product.id}` : `menu-prod-idx-${idx}`} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden group">
               <div className="aspect-video relative overflow-hidden bg-gray-50">
                 <img src={product.image || IMAGES.PRODUCT_PLACEHOLDER} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                 <div className="absolute top-3 right-3 flex gap-2">
