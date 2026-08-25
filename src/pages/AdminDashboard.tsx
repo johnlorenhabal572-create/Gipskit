@@ -1,21 +1,37 @@
 import { useState, useEffect } from 'react';
-import { getOrders, updateOrderStatus } from '../api/orderService';
-import { X, Eye } from 'lucide-react';
+import { fetchOrders, modifyOrderStatus } from '../api/orderService';
+import { X, Eye, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const AdminDashboard = () => {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Pending');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadOrders = async () => {
+    try {
+      const data = await fetchOrders();
+      setOrders(data || []);
+    } catch (err) {
+      console.error('Failed to load orders in AdminDashboard:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setOrders(getOrders());
+    loadOrders();
+    const interval = setInterval(loadOrders, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleStatusChange = (orderId, newStatus) => {
-    const updatedOrderList = updateOrderStatus(orderId, newStatus);
-    setOrders(updatedOrderList); 
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    // Optimistic UI update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    await modifyOrderStatus(orderId, newStatus);
+    await loadOrders();
   };
 
   const filteredOrders = orders.filter(order => {

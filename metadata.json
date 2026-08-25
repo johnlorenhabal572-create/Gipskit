@@ -1,6 +1,6 @@
 {
   "name": "Local Marketplace",
-  "description": "A comprehensive e-commerce and ordering system with real Gmail verification code authentication, MongoDB Atlas support, order management, and administrative control.",
+  "description": "A comprehensive e-commerce and POS platform built with Node.js, Express.js, and MongoDB Atlas featuring live inventory tracking, POS checkout, sales reporting, and Gmail authentication.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

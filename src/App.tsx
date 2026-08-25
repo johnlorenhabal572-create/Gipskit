@@ -12,9 +12,7 @@ import OrderHistory from './pages/TransactionHistory'; // Renamed
 import MyBill from './pages/MyBill';
 import CustomerPayment from './pages/CustomerPayment';
 import CustomerOrderHistory from './pages/CustomerOrderHistory';
-import Gallery from './pages/Gallery';
 import About from './pages/About';
-import Contact from './pages/Contact';
 import POS from './pages/POS';
 import ManageMenu from './pages/ManageMenu';
 import ManageInventory from './pages/ManageInventory';
@@ -32,16 +30,28 @@ function App() {
             <Navbar />
             <main className="flex-1">
               <Routes>
-                {/* Public Routes */}
+                {/* Public Routes (Menu Browsing & Info) */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/menu" element={<Catalog />} />
-                <Route path="/gallery" element={<Gallery />} />
                 <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/my-orders" element={<CustomerOrderHistory />} />
-                <Route path="/my-bill" element={<MyBill />} />
+                
+                {/* Customer Authenticated Routes */}
+                <Route path="/checkout" element={
+                  <ProtectedRoute>
+                    <Checkout />
+                  </ProtectedRoute>
+                } />
+                <Route path="/my-orders" element={
+                  <ProtectedRoute>
+                    <CustomerOrderHistory />
+                  </ProtectedRoute>
+                } />
+                <Route path="/my-bill" element={
+                  <ProtectedRoute>
+                    <MyBill />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Protected Route: Transaction history only for logged in admin */}
                 <Route path="/history" element={

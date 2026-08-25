@@ -31,7 +31,7 @@ export interface IOrder extends Document {
   change?: number;
   paymentMethod: string;
   paymentStatus: 'Unpaid' | 'Paid' | 'Refunded';
-  status: 'Pending' | 'Paid' | 'Processing' | 'Ready to Pickup' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Paid' | 'Processing' | 'Ready to Pickup' | 'On Delivery' | 'Completed' | 'Cancelled';
   orderType: 'POS' | 'Online';
   paymentScreenshot?: string;
   date: Date;
@@ -88,7 +88,7 @@ const OrderSchema: Schema<IOrder> = new Schema(
     },
     status: { 
       type: String, 
-      enum: ['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'Completed', 'Cancelled'], 
+      enum: ['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'On Delivery', 'Completed', 'Cancelled'], 
       default: 'Pending',
       index: true
     },

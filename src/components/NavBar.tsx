@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingCart, Flame, User, LogOut, Menu as MenuIcon, X, Home, Utensils, Info, Phone, ClipboardList, Settings, CheckCircle2, Image, TrendingUp, RefreshCw, Users, BarChart2, CreditCard, History, Receipt } from 'lucide-react';
+import { ShoppingCart, Flame, User, LogOut, Menu as MenuIcon, X, Home, Utensils, Info, ClipboardList, Settings, CheckCircle2, TrendingUp, RefreshCw, Users, BarChart2, CreditCard, History, Receipt } from 'lucide-react';
 import { IMAGES } from '../constants/images';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
@@ -32,9 +32,7 @@ const Navbar = () => {
           links: [
             { name: 'Home', path: '/', icon: <Home size={20} /> },
             { name: 'Menu', path: '/menu', icon: <Utensils size={20} /> },
-            { name: 'Gallery', path: '/gallery', icon: <Image size={20} /> },
             { name: 'About', path: '/about', icon: <Info size={20} /> },
-            { name: 'Contact', path: '/contact', icon: <Phone size={20} /> },
           ]
         }
       ];
@@ -71,9 +69,7 @@ const Navbar = () => {
           links: [
             { name: 'Home', path: '/', icon: <Home size={20} /> },
             { name: 'Menu', path: '/menu', icon: <Utensils size={20} /> },
-            { name: 'Gallery', path: '/gallery', icon: <Image size={20} /> },
             { name: 'About', path: '/about', icon: <Info size={20} /> },
-            { name: 'Contact', path: '/contact', icon: <Phone size={20} /> },
           ]
         },
         {
@@ -122,13 +118,15 @@ const Navbar = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             {(user?.role === 'customer' || !user) && (
               <button 
+                id="header-cart-btn"
                 onClick={() => setIsCartOpen(true)} 
-                className="relative p-2 hover:bg-gray-100 rounded-full transition-colors group"
+                className="relative p-2 text-dark hover:bg-gray-100 rounded-full transition-colors group"
+                title="Your Cart"
               >
-                <ShoppingCart size={24} />
+                <ShoppingCart size={22} />
                 {itemCount > 0 && (
                   <span className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center border border-white">
                     {itemCount}
@@ -137,13 +135,34 @@ const Navbar = () => {
               </button>
             )}
 
-            {(user?.role === 'customer' || !user) && (
+            {!user ? (
               <Link 
-                to="/menu" 
-                className="bg-primary text-white px-3 sm:px-6 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold hover:bg-opacity-90 transition-all shadow-sm"
+                id="header-signin-btn"
+                to="/login" 
+                className="bg-primary text-white hover:bg-opacity-90 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm shadow-primary/20 flex items-center gap-1.5 active:scale-95"
               >
-                Order Now
+                <User size={15} />
+                <span>Sign In</span>
               </Link>
+            ) : (
+              <div className="flex items-center gap-2 pl-1 border-l border-gray-100">
+                <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 py-1 px-3 rounded-full">
+                  <div className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-black">
+                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                  <span className="text-xs font-bold text-dark hidden md:inline truncate max-w-[110px]">
+                    {user.name}
+                  </span>
+                </div>
+                <button 
+                  id="header-logout-btn"
+                  onClick={handleLogout} 
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" 
+                  title="Logout"
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
             )}
           </div>
         </div>

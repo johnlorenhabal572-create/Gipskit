@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { CartContext } from '../context/CartContext';
-import { saveOrder } from '../api/orderService';
+import { createOrder } from '../api/orderService';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
@@ -13,42 +13,55 @@ const Checkout = () => {
     phone: '',
     paymentMethod: 'GCash'
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e: any) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (cart.length === 0) return alert("Your cart is empty!");
+    if (isSubmitting) return;
 
-    const orderDetails = {
-      customer: formData,
-      userEmail: user ? user.email : 'anonymous',
-      userName: user ? user.name : formData.name,
-      items: [...cart],
-      total: getCartTotal(),
-      date: new Date().toISOString(),
-      paymentMethod: formData.paymentMethod,
-      status: 'Pending',
-      paymentStatus: 'Unpaid'
-    };
+    setIsSubmitting(true);
+    try {
+      const orderDetails = {
+        customer: formData,
+        userEmail: user ? user.email : 'anonymous',
+        userName: user ? user.name : formData.name,
+        items: [...cart],
+        total: getCartTotal(),
+        date: new Date().toISOString(),
+        paymentMethod: formData.paymentMethod,
+        status: 'Pending',
+        paymentStatus: 'Unpaid',
+        orderType: 'Online'
+      };
 
-    const savedOrder = saveOrder(orderDetails); 
-    
-    // Save order ID to local storage for history tracking
-    const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
-    myOrderIds.push(savedOrder.id);
-    localStorage.setItem('my_order_ids', JSON.stringify(myOrderIds));
+      const savedOrder = await createOrder(orderDetails); 
+      
+      // Save order ID to local storage for history tracking
+      const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
+      if (savedOrder?.id) {
+        myOrderIds.push(savedOrder.id);
+        localStorage.setItem('my_order_ids', JSON.stringify(myOrderIds));
+      }
 
-    clearCart(); 
-    setFormData({ 
-      name: '', 
-      phone: '',
-      paymentMethod: 'GCash'
-    });
-    alert("Order placed successfully! Please proceed to My Bill for payment.");
-    navigate('/my-bill'); 
+      clearCart(); 
+      setFormData({ 
+        name: '', 
+        phone: '',
+        paymentMethod: 'GCash'
+      });
+      alert("Order placed successfully! Please proceed to My Bill for payment.");
+      navigate('/my-bill'); 
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('Failed to place order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

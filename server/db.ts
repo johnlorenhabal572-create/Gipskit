@@ -22,7 +22,8 @@ export const memoryStore = {
   codes: new Map<string, { code: string; verified: boolean; expiresAt: number; createdAt: number }>(),
   products: [] as any[],
   inventory: [] as any[],
-  inventoryLogs: [] as any[]
+  inventoryLogs: [] as any[],
+  orders: [] as any[]
 };
 
 export async function connectMongoose(): Promise<{ isConnected: boolean; error?: string }> {

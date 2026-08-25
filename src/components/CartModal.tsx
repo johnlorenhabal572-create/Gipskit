@@ -116,11 +116,12 @@ const CartModal = ({ isOpen, onClose }) => {
                 <span className="text-3xl font-bold text-dark tracking-tighter">₱{getCartTotal()}</span>
               </div>
               <button
+                id="cart-checkout-btn"
                 onClick={handleCheckout}
                 disabled={cart.length === 0}
                 className="w-full bg-primary text-white py-5 rounded-2xl hover:bg-opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed font-bold text-lg shadow-lg shadow-primary/20 transition-all transform active:scale-95 flex items-center justify-center gap-3"
               >
-                Proceed to Checkout
+                {!user ? 'Sign In to Checkout' : 'Proceed to Checkout'}
               </button>
             </div>
           </motion.aside>

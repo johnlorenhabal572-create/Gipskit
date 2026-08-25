@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getOrders } from '../api/orderService';
-import { getInventory } from '../api/inventoryService';
+import { fetchOrders } from '../api/orderService';
+import { fetchInventory } from '../api/inventoryService';
 import { 
   BarChart, 
   Bar, 
@@ -11,16 +11,32 @@ import {
   ResponsiveContainer, 
   Cell 
 } from 'recharts';
-import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, RefreshCw } from 'lucide-react';
 
 const Dashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'all'>('daily');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [ordersData, inventoryData] = await Promise.all([
+        fetchOrders(),
+        fetchInventory()
+      ]);
+      setOrders(ordersData || []);
+      setInventory(inventoryData || []);
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setOrders(getOrders());
-    setInventory(getInventory());
+    loadData();
   }, []);
 
   const today = new Date().toDateString();
@@ -73,26 +89,35 @@ const Dashboard = () => {
             <h1 className="text-3xl font-bold text-dark tracking-tight">Admin Dashboard</h1>
             <p className="text-gray-500 mt-1">Real-time overview of your store's performance.</p>
           </div>
-          <div className="flex bg-white p-1 rounded-2xl border border-gray-100 shadow-sm self-start md:self-center">
+          <div className="flex items-center gap-3 self-start md:self-center">
+            <div className="flex bg-white p-1 rounded-2xl border border-gray-100 shadow-sm">
+              <button
+                onClick={() => setReportPeriod('daily')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  reportPeriod === 'daily' 
+                    ? 'bg-dark text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-dark'
+                }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setReportPeriod('all')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  reportPeriod === 'all' 
+                    ? 'bg-dark text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-dark'
+                }`}
+              >
+                All-Time
+              </button>
+            </div>
             <button
-              onClick={() => setReportPeriod('daily')}
-              className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                reportPeriod === 'daily' 
-                  ? 'bg-dark text-white shadow-lg' 
-                  : 'text-gray-400 hover:text-dark'
-              }`}
+              onClick={loadData}
+              className="p-2.5 bg-white border border-gray-100 text-gray-500 hover:text-dark rounded-2xl shadow-sm transition-all"
+              title="Refresh Dashboard"
             >
-              Today
-            </button>
-            <button
-              onClick={() => setReportPeriod('all')}
-              className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                reportPeriod === 'all' 
-                  ? 'bg-dark text-white shadow-lg' 
-                  : 'text-gray-400 hover:text-dark'
-              }`}
-            >
-              All-Time
+              <RefreshCw size={16} />
             </button>
           </div>
         </header>

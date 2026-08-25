@@ -1,32 +1,39 @@
 import { useState, useEffect } from 'react';
-import { getOrders, updateOrderStatus } from '../api/orderService';
-import { CreditCard, CheckCircle2, XCircle, Eye, User, Phone, MapPin, Facebook } from 'lucide-react';
+import { fetchOrders, modifyOrderStatus } from '../api/orderService';
+import { CreditCard, CheckCircle2, XCircle, Eye, User, Phone, MapPin, Facebook, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const CustomerPayment = () => {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchOrders = () => {
-      const allOrders = getOrders();
+  const loadOrders = async () => {
+    try {
+      const allOrders = await fetchOrders();
       // Filter orders that are 'On Delivery' and have a payment screenshot (for GCash) or are COD
       const paymentOrders = allOrders.filter(order => 
         order.status === 'On Delivery'
       );
       setOrders(paymentOrders);
-    };
+    } catch (err) {
+      console.error('Failed to load customer payment orders:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 5000);
+  useEffect(() => {
+    loadOrders();
+    const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleConfirmPayment = (orderId) => {
-    updateOrderStatus(orderId, 'Completed');
+  const handleConfirmPayment = async (orderId: string) => {
+    await modifyOrderStatus(orderId, 'Completed');
     setSelectedOrder(null);
     alert("Payment confirmed! Order moved to Transaction History.");
-    setOrders(getOrders().filter(order => order.status === 'On Delivery'));
+    await loadOrders();
   };
 
   return (
@@ -186,8 +193,8 @@ const CustomerPayment = () => {
                     ) : (
                       <div className="bg-yellow-50 rounded-3xl p-12 text-center border border-yellow-100">
                         <CreditCard size={48} className="text-yellow-400 mx-auto mb-4" />
-                        <h4 className="text-xl font-bold text-yellow-900 mb-2">Cash on Delivery</h4>
-                        <p className="text-yellow-700 text-sm">Collect ₱{selectedOrder.total} from the customer upon delivery.</p>
+                        <h4 className="text-xl font-bold text-yellow-900 mb-2">Cash on Pickup</h4>
+                        <p className="text-yellow-700 text-sm">Collect ₱{selectedOrder.total} from the customer upon store pickup.</p>
                       </div>
                     )}
                   </div>

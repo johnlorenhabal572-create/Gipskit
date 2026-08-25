@@ -1,35 +1,43 @@
-import { useState, useEffect } from 'react';
-import { getOrders, deleteOrder } from '../api/orderService';
+import { useState, useEffect, useContext } from 'react';
+import { fetchOrders, removeOrder } from '../api/orderService';
+import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, Search, Clock, Eye, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const CustomerOrderHistory = () => {
-  const [myOrders, setMyOrders] = useState([]);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const { user } = useContext(AuthContext) as any;
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const fetchOrders = () => {
-    const allOrders = getOrders();
-    const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
-    
-    const userOrders = allOrders.filter(order => 
-      myOrderIds.includes(order.id) && 
-      order.status !== 'Pending'
-    );
-    
-    userOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setMyOrders(userOrders);
+  const loadOrders = async () => {
+    try {
+      const allOrders = await fetchOrders();
+      const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
+      
+      const userOrders = allOrders.filter(order => 
+        (myOrderIds.includes(order.id) || (user?.email && order.userEmail === user.email)) && 
+        order.status !== 'Pending'
+      );
+      
+      userOrders.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+      setMyOrders(userOrders);
+    } catch (err) {
+      console.error('Failed to load customer orders:', err);
+    }
   };
 
-  const handleDelete = (orderId: string) => {
+  useEffect(() => {
+    loadOrders();
+    const interval = setInterval(loadOrders, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const handleDelete = async (orderId: string) => {
     if (window.confirm('Are you sure you want to delete this order from your history?')) {
-      deleteOrder(orderId);
-      // Remove from my_order_ids as well if needed, but the filtered result won't show it anyway if deleted from capstone_orders
-      fetchOrders();
+      setMyOrders(prev => prev.filter(o => o.id !== orderId));
+      await removeOrder(orderId);
+      await loadOrders();
     }
   };
 

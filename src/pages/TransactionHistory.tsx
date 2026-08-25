@@ -1,29 +1,39 @@
 import { useState, useEffect, useContext } from 'react';
-import { getOrders, deleteOrder } from '../api/orderService';
+import { fetchOrders, removeOrder } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Eye, Receipt as ReceiptIcon, History as HistoryIcon, Search as SearchIcon, Trash2 } from 'lucide-react';
+import { X, Eye, Receipt as ReceiptIcon, History as HistoryIcon, Search as SearchIcon, Trash2, RefreshCw } from 'lucide-react';
 
 const TransactionHistory = () => {
   const { user } = useContext(AuthContext) as any;
-  const [myOrders, setMyOrders] = useState([]);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Completed');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  const fetchOrders = () => {
-    setMyOrders(getOrders());
+  const loadOrders = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchOrders();
+      setMyOrders(data || []);
+    } catch (err) {
+      console.error('Failed to load transaction history:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDelete = (orderId: string) => {
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const handleDelete = async (orderId: string) => {
     if (window.confirm('Are you sure you want to delete this transaction from record?')) {
-      deleteOrder(orderId);
-      fetchOrders();
+      setMyOrders(prev => prev.filter(o => o.id !== orderId));
+      await removeOrder(orderId);
+      await loadOrders();
     }
   };
 

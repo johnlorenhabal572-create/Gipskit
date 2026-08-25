@@ -1,53 +1,62 @@
-import { useState, useEffect } from 'react';
-import { getOrders, updateOrderPayment, updateOrderStatus } from '../api/orderService';
+import { useState, useEffect, useContext } from 'react';
+import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
+import { AuthContext } from '../context/AuthContext';
 import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const MyBill = () => {
-  const [bills, setBills] = useState([]);
+  const [bills, setBills] = useState<any[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchBills = () => {
-      const allOrders = getOrders();
+  const loadBills = async () => {
+    try {
+      const allOrders = await fetchOrders();
       const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
       
       // Filter orders that are 'Pending' and belong to this customer
       const activeBills = allOrders.filter(order => 
-        myOrderIds.includes(order.id) && 
+        (myOrderIds.includes(order.id) || (user?.email && order.userEmail === user.email)) && 
         order.status === 'Pending'
       );
       
       setBills(activeBills);
-    };
+    } catch (err) {
+      console.error('Failed to load bills:', err);
+    }
+  };
 
-    fetchBills();
-    const interval = setInterval(fetchBills, 3000); // Poll for updates
+  useEffect(() => {
+    loadBills();
+    const interval = setInterval(loadBills, 4000); // Poll for updates
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
-  const handleFileUpload = (orderId, e) => {
+  const handleFileUpload = (orderId: string, e: any) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         setUploading(orderId);
-        // Simulate upload delay
-        setTimeout(() => {
-          updateOrderPayment(orderId, { 
+        try {
+          await modifyOrderPayment(orderId, { 
             paymentScreenshot: reader.result,
             paymentStatus: 'Paid' 
           });
+          await loadBills();
+        } catch (err) {
+          console.error('Failed to upload screenshot:', err);
+        } finally {
           setUploading(null);
-        }, 1500);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleConfirmOrder = (orderId) => {
-    updateOrderStatus(orderId, 'Paid');
+  const handleConfirmOrder = async (orderId: string) => {
+    await modifyOrderStatus(orderId, 'Paid');
     alert("Order confirmed! You can now track it in My Order.");
     navigate('/my-orders');
   };

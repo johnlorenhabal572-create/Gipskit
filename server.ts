@@ -7,6 +7,7 @@ import { User, VerificationCode } from './server/models';
 import { sendVerificationEmail } from './server/email';
 import productRoutes from './server/routes/productRoutes';
 import inventoryRoutes from './server/routes/inventoryRoutes';
+import orderRoutes from './server/routes/orderRoutes';
 
 // Security Helper: Safe string extractor and sanitizer
 function sanitizeString(input: unknown, maxLength = 255): string {
@@ -342,6 +343,10 @@ async function startServer() {
 
   // 8. Inventory REST API
   app.use('/api/inventory', inventoryRoutes);
+
+  // 9. Orders & Sales REST API
+  app.use('/api/orders', orderRoutes);
+  app.use('/api/sales', orderRoutes);
 
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {
