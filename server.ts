@@ -132,6 +132,21 @@ async function startServer() {
     }
   });
 
+  // 2.2 Email Transporter Health / Diagnostic endpoint
+  app.get('/api/auth/email-status', (req, res) => {
+    const user = process.env.GMAIL_USER || process.env.SMTP_USER || process.env.EMAIL_USER;
+    const pass = process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || process.env.EMAIL_PASS;
+    const isConfigured = Boolean(user && pass);
+
+    res.json({
+      configured: isConfigured,
+      user: user ? `${user.substring(0, 3)}***@${user.split('@')[1] || 'domain'}` : null,
+      instructions: isConfigured 
+        ? 'Email service is configured.' 
+        : 'To enable real Gmail delivery on Render, set GMAIL_USER and GMAIL_APP_PASSWORD (16-character Google App Password) in your Environment Variables.'
+    });
+  });
+
   // 3. Verify the 6-Digit Code
   app.post('/api/auth/verify-code', async (req, res) => {
     try {
