@@ -106,8 +106,8 @@ const Navbar = () => {
               <MenuIcon size={22} />
             </button>
             <Link to="/" className="hidden sm:flex items-center gap-2.5 text-lg font-black tracking-tight">
-              <div className="bg-dark p-1 rounded-md overflow-hidden w-7 h-7 flex items-center justify-center">
-                <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain" />
+              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-dark shadow-sm border border-gray-800 shrink-0">
+                <img src={IMAGES.LOGO} alt="Gip's Kitchen Logo" className="w-full h-full object-cover" />
               </div>
               <span className="tracking-tight">GIP'S <span className="text-primary font-black">KITCHEN</span></span>
             </Link>
@@ -195,9 +195,9 @@ const Navbar = () => {
         <div className="flex flex-col h-full p-6">
           {/* Logo & Close */}
           <div className="flex justify-between items-center pb-5 border-b border-gray-200">
-            <Link to="/" className="flex items-center gap-2 text-xl font-black tracking-tight" onClick={() => setIsSidebarOpen(false)}>
-              <div className="bg-dark p-1 rounded-md overflow-hidden w-8 h-8 flex items-center justify-center">
-                <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain" />
+            <Link to="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight" onClick={() => setIsSidebarOpen(false)}>
+              <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-dark shadow-sm border border-gray-800 shrink-0">
+                <img src={IMAGES.LOGO} alt="Gip's Kitchen Logo" className="w-full h-full object-cover" />
               </div>
               <span>GIP'S <span className="text-primary">KITCHEN</span></span>
             </Link>

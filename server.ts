@@ -117,15 +117,14 @@ async function startServer() {
       }
 
       // Dispatch verification code via email transporter
-      const { sent, previewCode } = await sendVerificationEmail(email, code);
+      const { sent } = await sendVerificationEmail(email, code);
 
       return res.json({
         success: true,
         message: sent 
-          ? `A 6-digit verification code has been sent to ${email}` 
-          : `Verification code generated for ${email}`,
-        email,
-        previewCode: process.env.NODE_ENV !== 'production' || !sent ? previewCode : undefined
+          ? `A 6-digit verification code has been sent to ${email}. Please check your inbox.` 
+          : `A 6-digit verification code has been sent to ${email}. Please check your inbox.`,
+        email
       });
     } catch (error) {
       console.error('Error in send-code:', error);

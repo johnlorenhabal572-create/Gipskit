@@ -17,10 +17,15 @@ const LandingPage = () => {
   return (
     <div className="min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center">
       {/* Hero Section */}
-      <section className="relative py-16 sm:py-24 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative py-14 sm:py-20 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
+          
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shadow-md border-2 border-gray-900 bg-dark mb-4 p-0.5">
+            <img src={IMAGES.LOGO} alt="Gip's Kitchen Logo" className="w-full h-full object-cover" />
+          </div>
+
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs font-bold text-gray-600 mb-6 uppercase tracking-wider">
-            <span>Official Gip's Kitchen Platform</span>
+            <span>Official Gip's Kitchen Food & Drinks</span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-black mb-6 tracking-tight text-dark leading-[1.05]">

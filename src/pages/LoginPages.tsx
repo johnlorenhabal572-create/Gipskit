@@ -46,7 +46,6 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const { login, sendSignUpCode, verifySignUpCode, completeSignUp } = useContext(AuthContext) as any;
@@ -160,10 +159,7 @@ const LoginPage = () => {
       const res = await sendSignUpCode(cleanEmail);
       setSignUpStep(2);
       setResendCooldown(60);
-      setInfoMsg(res.message || `Verification code sent to ${cleanEmail}`);
-      if (res.previewCode) {
-        setPreviewCode(res.previewCode);
-      }
+      setInfoMsg(res.message || `A 6-digit verification code has been sent to your email (${cleanEmail}). Please check your inbox.`);
       setTimeout(() => {
         otpInputRefs.current[0]?.focus();
       }, 100);
@@ -265,7 +261,6 @@ const LoginPage = () => {
     setConfirmPassword('');
     setError('');
     setInfoMsg('');
-    setPreviewCode(null);
   };
 
   return (
@@ -336,12 +331,6 @@ const LoginPage = () => {
                 <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-green-600" />
                 <div className="flex-1">
                   <p className="leading-relaxed">{infoMsg}</p>
-                  {previewCode && (
-                    <div className="mt-2 bg-white p-2 rounded border border-green-300 inline-block">
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 block mb-0.5">Verification Code</span>
-                      <span className="font-mono text-sm font-black text-primary tracking-widest">{previewCode}</span>
-                    </div>
-                  )}
                 </div>
               </motion.div>
             )}

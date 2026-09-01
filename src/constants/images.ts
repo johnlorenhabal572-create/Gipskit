@@ -6,7 +6,7 @@
 
 export const IMAGES = {
   // Logo & Branding
-  LOGO: '/images/427931330_122099975312220186_7088798552863203559_n.jpg', // Place your logo.png in public/images/
+  LOGO: '/images/logo.png', // Official Gip's Kitchen Logo
   
   // Landing Page
   HERO_BG: '/images/FB_IMG_1776126830971.jpg', // Place your hero-bg.jpg in public/images/

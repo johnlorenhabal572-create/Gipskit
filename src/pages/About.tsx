@@ -175,8 +175,8 @@ const About = () => {
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div className="col-span-1 md:col-span-2">
               <Link to="/" className="flex items-center gap-2 text-xl font-black tracking-tight mb-4">
-                <div className="bg-primary p-1 rounded overflow-hidden w-8 h-8 flex items-center justify-center">
-                  <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain brightness-0 invert" />
+                <div className="bg-dark p-0.5 rounded overflow-hidden w-8 h-8 flex items-center justify-center border border-gray-700">
+                  <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <span>GIP'S <span className="text-primary">KITCHEN</span></span>
               </Link>
