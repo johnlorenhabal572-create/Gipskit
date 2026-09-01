@@ -1,13 +1,22 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface ILoginRecord {
+  timestamp: Date;
+  ip?: string;
+  userAgent?: string;
+  action?: string;
+}
+
 export interface IUser extends Document {
   id: string;
   name: string;
   email: string;
   password?: string;
   role: 'customer' | 'admin' | 'staff';
+  status: 'Active' | 'Suspended' | 'Disabled';
   createdAt: Date;
   lastLogin: Date;
+  loginHistory?: ILoginRecord[];
 }
 
 const UserSchema: Schema<IUser> = new Schema(
@@ -22,8 +31,22 @@ const UserSchema: Schema<IUser> = new Schema(
       default: 'customer',
       index: true
     },
+    status: {
+      type: String,
+      enum: ['Active', 'Suspended', 'Disabled'],
+      default: 'Active',
+      index: true
+    },
     createdAt: { type: Date, default: Date.now },
-    lastLogin: { type: Date, default: Date.now }
+    lastLogin: { type: Date, default: Date.now },
+    loginHistory: [
+      {
+        timestamp: { type: Date, default: Date.now },
+        ip: { type: String },
+        userAgent: { type: String },
+        action: { type: String, default: 'Login' }
+      }
+    ]
   },
   {
     timestamps: true,

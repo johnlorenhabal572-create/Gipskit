@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext'; // 1. Import AuthProvider
 import Navbar from './components/NavBar';
@@ -55,21 +55,21 @@ function App() {
                 
                 {/* Protected Route: Transaction history only for logged in admin */}
                 <Route path="/history" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireAdmin={true}>
                     <OrderHistory />
                   </ProtectedRoute>
                 } />
 
                 {/* Customer Payment: for admin */}
                 <Route path="/customer-payment" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireAdmin={true}>
                     <CustomerPayment />
                   </ProtectedRoute>
                 } />
 
                 {/* POS: Point of Sale for admin */}
                 <Route path="/pos" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireAdmin={true}>
                     <POS />
                   </ProtectedRoute>
                 } />
@@ -122,6 +122,9 @@ function App() {
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
+
+                {/* Catch-all Wildcard Route to redirect unknown paths to Home */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
           </div>

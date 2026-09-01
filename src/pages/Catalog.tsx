@@ -1,12 +1,13 @@
 import { useState, useEffect, useContext } from 'react';
 import ProductCard from '../components/ProductCard';
-import { fetchProducts, CATEGORIES } from '../api/productService';
+import { fetchProducts, fetchCategories, CATEGORIES } from '../api/productService';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, UtensilsCrossed } from 'lucide-react';
 
 const Catalog = () => {
   const [products, setProducts] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>(CATEGORIES);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useContext(AuthContext) as any;
@@ -18,71 +19,91 @@ const Catalog = () => {
       return;
     }
 
-    const loadProducts = async () => {
+    const loadData = async () => {
       try {
-        const data = await fetchProducts();
-        setProducts(data);
+        const [productsData, catsData] = await Promise.all([
+          fetchProducts(),
+          fetchCategories()
+        ]);
+        setProducts(productsData);
+        if (Array.isArray(catsData) && catsData.length > 0) {
+          setCategoriesList(catsData);
+        }
       } catch (error) {
-        console.error('Failed to load menu catalog:', error);
+        console.error('Failed to load menu catalog or categories:', error);
       }
     };
 
-    loadProducts();
+    loadData();
   }, [user, navigate]);
 
   if (user && user.role !== 'customer') return null;
 
-  // Use fixed category list
-  const categories = ['All', ...CATEGORIES];
+  // Combine dynamic categories list with 'All'
+  const categories = ['All', ...categoriesList];
 
   // Filter products based on selected category and search term
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
   return (
-    <div className="container mx-auto p-6 py-12">
-      <div className="text-center mb-12 max-w-2xl mx-auto">
-        <div className="relative mb-10 group">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" size={24} />
+    <div className="container mx-auto p-4 sm:p-6 py-8 sm:py-12 max-w-7xl">
+      <div className="mb-8 max-w-3xl mx-auto text-center">
+        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight mb-2">Our Menu</h1>
+        <p className="text-gray-500 text-xs sm:text-sm mb-6">Choose your favorites for quick and convenient pickup</p>
+
+        {/* Search Bar */}
+        <div className="relative mb-6 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" size={18} />
           <input 
             type="text" 
-            placeholder="What delicious dish are you looking for?" 
+            placeholder="Search our delicious dishes..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-16 pr-8 py-6 rounded-[2rem] bg-white border border-gray-100 shadow-xl shadow-gray-100/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-lg font-medium text-dark placeholder:text-gray-300"
+            className="w-full pl-11 pr-4 py-3 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark transition-colors text-sm font-medium text-dark placeholder:text-gray-400"
           />
         </div>
         
         {/* Category Filter Bar */}
-        <div className="flex flex-wrap justify-center gap-3 mb-12">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
-                selectedCategory === category 
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30' 
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+        <div className="flex flex-wrap justify-center gap-2">
+          {categories.map((category) => {
+            const isSelected = selectedCategory === category;
+            return (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors border ${
+                  isSelected 
+                    ? 'bg-dark text-white border-dark' 
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
         {filteredProducts.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
       
       {filteredProducts.length === 0 && (
-        <div className="text-center py-20">
-          <p className="text-gray-400 font-medium">No items found in this category.</p>
+        <div className="text-center py-16 bg-white border border-gray-200 rounded-xl p-8 max-w-md mx-auto mt-6">
+          <p className="text-gray-500 font-medium text-sm">No items found matching "{searchTerm}".</p>
+          <button 
+            onClick={() => { setSearchTerm(''); setSelectedCategory('All'); }}
+            className="mt-3 text-xs font-bold text-primary hover:underline"
+          >
+            Clear filters
+          </button>
         </div>
       )}
     </div>

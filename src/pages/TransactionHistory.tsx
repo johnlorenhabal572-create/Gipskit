@@ -1,27 +1,21 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
-import { AuthContext } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Eye, Receipt as ReceiptIcon, History as HistoryIcon, Search as SearchIcon, Trash2, RefreshCw } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import { X, Eye, Receipt as ReceiptIcon, Search, Trash2 } from 'lucide-react';
 
 const TransactionHistory = () => {
-  const { user } = useContext(AuthContext) as any;
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Completed');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   const loadOrders = async () => {
-    setIsLoading(true);
     try {
       const data = await fetchOrders();
       setMyOrders(data || []);
     } catch (err) {
       console.error('Failed to load transaction history:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -48,237 +42,212 @@ const TransactionHistory = () => {
   });
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      
-      {/* Search and Filter Controls */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-8 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Search by Order ID or Customer Name..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 text-dark font-medium"
-          />
-        </div>
-        <select 
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-gray-50 border-none p-3 rounded-2xl focus:ring-2 focus:ring-primary/20 font-bold text-gray-600"
-        >
-          <option value="All">All Statuses</option>
-          <option value="Pending">Pending</option>
-          <option value="Processing">Processing</option>
-          <option value="On Delivery">On Delivery</option>
-          <option value="Completed">Completed</option>
-          <option value="Cancelled">Cancelled</option>
-        </select>
-      </div>
-
-      {/* Order List */}
-      <div className="grid gap-4">
-        {filteredOrders.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-200">
-            <p className="text-gray-400 font-medium">No transactions found matching your criteria.</p>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        
+        {/* Search and Filter Controls */}
+        <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col md:flex-row gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input 
+              type="text" 
+              placeholder="Search by Order ID or Customer Name..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-medium focus:outline-none focus:border-dark text-dark"
+            />
           </div>
-        ) : (
-          filteredOrders.map(order => (
-            <div key={order.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-50 hover:shadow-md transition-all flex flex-col md:flex-row justify-between md:items-center gap-6">
-              <div className="flex flex-1 gap-4 items-start">
-                <div className="bg-gray-50 p-4 rounded-2xl">
-                  <Receipt size={24} className="text-primary" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs font-bold text-gray-400 uppercase tracking-tighter">{order.id}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      order.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                      order.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                      order.status === 'On Delivery' ? 'bg-purple-100 text-purple-700' :
-                      order.status === 'Processing' ? 'bg-blue-100 text-blue-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {order.status}
-                    </span>
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="bg-gray-50 border border-gray-300 px-3 py-2 rounded-lg text-xs font-bold text-dark focus:outline-none focus:border-dark"
+          >
+            <option value="All">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Processing">Processing</option>
+            <option value="On Delivery">On Delivery</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+
+        {/* Order List */}
+        <div className="space-y-3">
+          {filteredOrders.length === 0 ? (
+            <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+              <p className="text-gray-500 font-medium text-xs">No transactions found matching your criteria.</p>
+            </div>
+          ) : (
+            filteredOrders.map(order => (
+              <div key={order.id} className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 hover:border-dark transition-colors flex flex-col md:flex-row justify-between md:items-center gap-4">
+                <div className="flex flex-1 gap-3.5 items-start">
+                  <div className="bg-gray-100 p-2.5 rounded-lg border border-gray-200 text-gray-700 shrink-0">
+                    <ReceiptIcon size={20} />
                   </div>
-                  <h4 className="font-bold text-lg text-gray-800">{order.customer.name}</h4>
-                  <p className="text-xs text-gray-500 font-medium">
-                    {new Date(order.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-xs font-bold text-gray-500">{order.id}</span>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                        order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                        order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                        order.status === 'On Delivery' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                        order.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-dark">{order.customer.name}</h4>
+                    <p className="text-xs text-gray-500">
+                      {new Date(order.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setSelectedOrder(order)}
+                      className="p-1.5 bg-white border border-gray-300 text-gray-600 hover:text-dark hover:border-dark rounded-lg transition-colors"
+                      title="View Details"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(order.id)}
+                      className="p-1.5 bg-white border border-gray-300 text-gray-600 hover:text-red-600 hover:border-red-300 rounded-lg transition-colors"
+                      title="Delete Transaction"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  {order.paymentScreenshot && (
+                    <button 
+                      onClick={() => setPreviewImage(order.paymentScreenshot)}
+                      className="relative block shrink-0"
+                    >
+                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200">
+                        <img 
+                          src={order.paymentScreenshot} 
+                          alt="Receipt" 
+                          className="w-full h-full object-cover" 
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    </button>
+                  )}
+                  <div className="flex flex-col sm:items-end">
+                    <p className="text-base font-black text-dark">₱{order.total}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{order.items.length} Item(s) • {order.paymentMethod}</p>
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex items-center gap-2 border-r border-gray-100 pr-4">
-                   <button 
-                    onClick={() => setSelectedOrder(order)}
-                    className="p-2 bg-gray-50 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-all"
-                    title="View Details"
-                  >
-                    <Eye size={20} />
-                  </button>
+            ))
+          )}
+        </div>
+
+        {/* Order Detail Modal */}
+        <AnimatePresence>
+          {selectedOrder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div 
+                onClick={() => setSelectedOrder(null)}
+                className="absolute inset-0 bg-black/50"
+              />
+              <div
+                className="bg-white w-full max-w-lg rounded-xl border border-gray-200 relative z-10 overflow-hidden flex flex-col"
+              >
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                  <div>
+                    <h3 className="font-bold text-dark text-xs uppercase tracking-wider">Transaction Details</h3>
+                    <p className="text-[10px] font-mono text-gray-500">{selectedOrder.id}</p>
+                  </div>
                   <button 
-                    onClick={() => handleDelete(order.id)}
-                    className="p-2 bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                    title="Delete Transaction"
+                    onClick={() => setSelectedOrder(null)}
+                    className="text-gray-400 hover:text-dark"
                   >
-                    <Trash2 size={20} />
+                    <X size={18} />
                   </button>
                 </div>
-
-                {order.paymentScreenshot && (
-                  <button 
-                    onClick={() => setPreviewImage(order.paymentScreenshot)}
-                    className="group/receipt relative block shrink-0"
-                  >
-                    <div className="w-12 h-12 rounded-xl overflow-hidden shadow-sm border border-gray-100">
-                      <img 
-                        src={order.paymentScreenshot} 
-                        alt="Receipt" 
-                        className="w-full h-full object-cover transition-transform group-hover/receipt:scale-110" 
-                        referrerPolicy="no-referrer"
-                      />
+                
+                <div className="p-5 max-h-[60vh] overflow-y-auto space-y-4">
+                  <div className="divide-y divide-gray-100">
+                    {selectedOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="py-2.5 flex gap-3 items-center">
+                        <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden shrink-0">
+                          <img 
+                            src={item.image || 'https://picsum.photos/seed/food/200/200'} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-dark text-xs">{item.name}</h4>
+                          <p className="text-[11px] text-gray-500">₱{item.price} x {item.quantity}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-dark text-xs">₱{item.price * item.quantity}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="pt-3 border-t border-gray-200 flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Status</p>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                        selectedOrder.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                        'bg-gray-100 text-gray-700 border-gray-200'
+                      }`}>
+                        {selectedOrder.status}
+                      </span>
                     </div>
-                    <div className="absolute inset-0 bg-dark/40 opacity-0 group-hover/receipt:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                      <Eye className="text-white" size={12} />
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Total Bill</p>
+                      <p className="text-xl font-black text-dark">₱{selectedOrder.total}</p>
                     </div>
-                  </button>
-                )}
-                <div className="flex flex-col md:items-end gap-1">
-                  <p className="text-2xl font-bold text-primary tracking-tighter">₱{order.total}</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{order.items.length} Item(s) • {order.paymentMethod}</p>
+                  </div>
+                </div>
+                
+                <div className="p-3 bg-gray-50 border-t border-gray-200 text-center">
+                  <p className="text-[10px] text-gray-500 font-medium">Ordered on {new Date(selectedOrder.date).toLocaleString()}</p>
                 </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </AnimatePresence>
 
-      {/* Order Detail Modal */}
-      <AnimatePresence>
-        {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedOrder(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden"
-            >
-              <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                <div>
-                  <h3 className="font-bold text-dark">Transaction Details</h3>
-                  <p className="text-[10px] font-mono text-gray-400 uppercase tracking-tighter">{selectedOrder.id}</p>
-                </div>
-                <button 
-                  onClick={() => setSelectedOrder(null)}
-                  className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-400"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                <div className="space-y-6">
-                  {selectedOrder.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-4 items-center">
-                      <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden shrink-0 border border-gray-100 p-1">
-                        <img 
-                          src={item.image || 'https://picsum.photos/seed/food/200/200'} 
-                          alt={item.name} 
-                          className="w-full h-full object-cover rounded-xl"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-dark text-sm">{item.name}</h4>
-                        <p className="text-xs text-gray-400">₱{item.price} x {item.quantity}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-dark">₱{item.price * item.quantity}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="mt-8 pt-8 border-t border-dashed border-gray-100 flex justify-between items-end">
-                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Status</p>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      selectedOrder.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                      'bg-primary/10 text-primary'
-                    }`}>
-                      {selectedOrder.status}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Bill</p>
-                    <p className="text-3xl font-black text-primary tracking-tighter">₱{selectedOrder.total}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-6 bg-gray-50/50 border-t border-gray-50 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Ordered on {new Date(selectedOrder.date).toLocaleString()}</p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Image Preview Modal */}
-      <AnimatePresence>
-        {previewImage && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-dark/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-10"
-            onClick={() => setPreviewImage(null)}
-          >
-            <button 
-              className="absolute top-6 right-6 text-white/50 hover:text-white bg-white/10 p-2 rounded-full transition-colors"
+        {/* Image Preview Modal */}
+        <AnimatePresence>
+          {previewImage && (
+            <div 
+              className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4"
               onClick={() => setPreviewImage(null)}
             >
-              <X size={32} />
-            </button>
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="max-w-full max-h-full sm:max-w-3xl flex items-center justify-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img 
-                src={previewImage} 
-                alt="Receipt Preview" 
-                className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl border-4 border-white/10"
-                referrerPolicy="no-referrer"
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <button 
+                className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
+                onClick={() => setPreviewImage(null)}
+              >
+                <X size={24} />
+              </button>
+              <div 
+                className="max-w-full max-h-full sm:max-w-2xl bg-white p-2 rounded-xl border border-gray-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img 
+                  src={previewImage} 
+                  alt="Receipt Preview" 
+                  className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
-
-const History = ({ size }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
-);
-
-const Search = ({ size, className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-);
-
-const Receipt = ({ size, className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><path d="M16 8h-6"/><path d="M16 12H8"/><path d="M13 16H8"/></svg>
-);
 
 export default TransactionHistory;

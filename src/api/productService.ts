@@ -15,6 +15,37 @@ export const CATEGORIES = [
   "Beverages"
 ];
 
+// Async API: Fetch dynamic categories from server
+export const fetchCategories = async (): Promise<string[]> => {
+  try {
+    const res = await fetch('/api/categories', {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      return CATEGORIES;
+    }
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? data : CATEGORIES;
+  } catch (err) {
+    console.error('Error fetching categories:', err);
+    return CATEGORIES;
+  }
+};
+
+// Async API: Create new category (Admin/Staff)
+export const createCategory = async (name: string): Promise<any> => {
+  const res = await fetch('/api/categories', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ name: name.trim() })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to create category');
+  }
+  return data;
+};
+
 // Helper to get authorization headers from current session
 export const getAuthHeaders = (): Record<string, string> => {
   try {

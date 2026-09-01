@@ -3,11 +3,12 @@ import cors from 'cors';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { connectMongoose, getDbStatus, memoryStore, mongoose } from './server/db';
-import { User, VerificationCode } from './server/models';
+import { User, VerificationCode, Order } from './server/models';
 import { sendVerificationEmail } from './server/email';
 import productRoutes from './server/routes/productRoutes';
 import inventoryRoutes from './server/routes/inventoryRoutes';
 import orderRoutes from './server/routes/orderRoutes';
+import categoryRoutes from './server/routes/categoryRoutes';
 
 // Security Helper: Safe string extractor and sanitizer
 function sanitizeString(input: unknown, maxLength = 255): string {
@@ -186,7 +187,11 @@ async function startServer() {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
       const password = sanitizeString(req.body.password, 64);
-      const name = sanitizeString(req.body.name, 100) || email.split('@')[0];
+      const name = sanitizeString(req.body.name, 100);
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'Full Name is a required field.' });
+      }
 
       if (!email || !isGmailAddress(email)) {
         return res.status(400).json({ error: 'A valid Gmail address (@gmail.com) is required.' });
@@ -225,6 +230,15 @@ async function startServer() {
 
       const now = new Date();
       const newUserId = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
+      const userAgent = req.headers['user-agent'] || 'Web Browser';
+
+      const initialActivity = {
+        timestamp: now,
+        ip: clientIp,
+        userAgent,
+        action: 'Account Registered'
+      };
 
       if (isConnected) {
         const existing = await User.findOne({ email });
@@ -238,8 +252,10 @@ async function startServer() {
           name,
           password,
           role: 'customer',
+          status: 'Active',
           createdAt: now,
-          lastLogin: now
+          lastLogin: now,
+          loginHistory: [initialActivity]
         });
       } else {
         const existing = memoryStore.users.find(u => u.email === email);
@@ -253,8 +269,15 @@ async function startServer() {
           name,
           password,
           role: 'customer',
+          status: 'Active',
           createdAt: now.toISOString(),
-          lastLogin: now.toISOString()
+          lastLogin: now.toISOString(),
+          loginHistory: [{
+            timestamp: now.toISOString(),
+            ip: clientIp,
+            userAgent,
+            action: 'Account Registered'
+          }]
         });
       }
 
@@ -265,7 +288,8 @@ async function startServer() {
           id: newUserId,
           email,
           name,
-          role: 'customer'
+          role: 'customer',
+          status: 'Active'
         }
       });
     } catch (error) {
@@ -298,13 +322,50 @@ async function startServer() {
         return res.status(401).json({ error: 'Invalid Gmail address or password. Please try again.' });
       }
 
-      // Update last login
+      // Check Account Status (Active / Suspended / Disabled)
+      const userStatus = matchedUser.status || 'Active';
+      if (userStatus === 'Suspended') {
+        return res.status(403).json({ 
+          error: 'Your account is currently suspended. Please contact store management.' 
+        });
+      }
+      if (userStatus === 'Disabled') {
+        return res.status(403).json({ 
+          error: 'Your account has been disabled. Please contact support.' 
+        });
+      }
+
+      // Record login history and update last login
       const now = new Date();
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
+      const userAgent = req.headers['user-agent'] || 'Web Browser';
+      const newActivity = {
+        timestamp: now,
+        ip: clientIp,
+        userAgent,
+        action: 'User Sign In'
+      };
+
       if (isConnected && matchedUser.save) {
         matchedUser.lastLogin = now;
+        if (!matchedUser.loginHistory) matchedUser.loginHistory = [];
+        matchedUser.loginHistory.unshift(newActivity);
+        if (matchedUser.loginHistory.length > 20) {
+          matchedUser.loginHistory = matchedUser.loginHistory.slice(0, 20);
+        }
         await matchedUser.save();
       } else if (matchedUser) {
         matchedUser.lastLogin = now.toISOString();
+        if (!matchedUser.loginHistory) matchedUser.loginHistory = [];
+        matchedUser.loginHistory.unshift({
+          timestamp: now.toISOString(),
+          ip: clientIp,
+          userAgent,
+          action: 'User Sign In'
+        });
+        if (matchedUser.loginHistory.length > 20) {
+          matchedUser.loginHistory = matchedUser.loginHistory.slice(0, 20);
+        }
       }
 
       return res.json({
@@ -313,7 +374,8 @@ async function startServer() {
           id: matchedUser.id || matchedUser._id?.toString(),
           email: matchedUser.email,
           name: matchedUser.name,
-          role: matchedUser.role || 'customer'
+          role: matchedUser.role || 'customer',
+          status: matchedUser.status || 'Active'
         }
       });
     } catch (error) {
@@ -322,15 +384,62 @@ async function startServer() {
     }
   });
 
-  // 6. User Management (Admin only)
+  // 6. User Management (Admin only) - Fetch all registered accounts with orders count & activity history
   app.get('/api/auth/users', async (req, res) => {
     try {
       const { isConnected } = await getDbStatus();
+
       if (isConnected) {
         const users = await User.find({}, { password: 0 }).lean();
-        return res.json(users);
+        
+        // Count orders for each user
+        const usersWithStats = await Promise.all(
+          users.map(async (u: any) => {
+            const orderCount = await Order.countDocuments({
+              $or: [
+                { 'customer.email': u.email },
+                { 'customer.email': { $regex: new RegExp(`^${u.email}$`, 'i') } }
+              ]
+            }).catch(() => 0);
+
+            return {
+              id: u.id || u._id?.toString(),
+              name: u.name,
+              email: u.email,
+              role: u.role || 'customer',
+              status: u.status || 'Active',
+              createdAt: u.createdAt || u._id?.getTimestamp?.() || new Date(),
+              lastLogin: u.lastLogin || u.createdAt || new Date(),
+              orderCount: orderCount || 0,
+              loginHistory: u.loginHistory || []
+            };
+          })
+        );
+
+        return res.json(usersWithStats);
       }
-      const safeUsers = memoryStore.users.map(({ password, ...rest }) => rest);
+
+      // Memory store fallback
+      const safeUsers = memoryStore.users.map(({ password, ...u }) => {
+        const orderCount = memoryStore.orders.filter(
+          o => o.customer?.email && o.customer.email.toLowerCase() === u.email.toLowerCase()
+        ).length;
+
+        return {
+          ...u,
+          status: u.status || 'Active',
+          orderCount,
+          loginHistory: u.loginHistory || [
+            {
+              timestamp: u.lastLogin || u.createdAt,
+              ip: '127.0.0.1',
+              userAgent: 'System Session',
+              action: 'Account Active'
+            }
+          ]
+        };
+      });
+
       return res.json(safeUsers);
     } catch (error) {
       console.error('Error in get-users:', error);
@@ -338,13 +447,182 @@ async function startServer() {
     }
   });
 
+  // Create Staff/Admin user account directly by Administrator
+  app.post('/api/auth/users', async (req, res) => {
+    try {
+      const name = sanitizeString(req.body.name, 100);
+      const email = sanitizeString(req.body.email).toLowerCase();
+      const password = sanitizeString(req.body.password, 64);
+      const role = ['admin', 'staff', 'customer'].includes(req.body.role) ? req.body.role : 'staff';
+      const status = ['Active', 'Suspended', 'Disabled'].includes(req.body.status) ? req.body.status : 'Active';
+
+      if (!name || !email || !password) {
+        return res.status(400).json({ error: 'Name, email, and password are required.' });
+      }
+
+      const { isConnected } = await getDbStatus();
+      const now = new Date();
+      const newUserId = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const newActivity = {
+        timestamp: now,
+        ip: req.ip || '127.0.0.1',
+        userAgent: 'Created by Admin',
+        action: 'Account Provisioned'
+      };
+
+      if (isConnected) {
+        const existing = await User.findOne({ email });
+        if (existing) {
+          return res.status(400).json({ error: 'An account with this email already exists.' });
+        }
+
+        const created = await User.create({
+          id: newUserId,
+          name,
+          email,
+          password,
+          role,
+          status,
+          createdAt: now,
+          lastLogin: now,
+          loginHistory: [newActivity]
+        });
+
+        return res.status(201).json({
+          id: created.id,
+          name: created.name,
+          email: created.email,
+          role: created.role,
+          status: created.status,
+          createdAt: created.createdAt,
+          lastLogin: created.lastLogin,
+          orderCount: 0,
+          loginHistory: [newActivity]
+        });
+      } else {
+        const existing = memoryStore.users.find(u => u.email === email);
+        if (existing) {
+          return res.status(400).json({ error: 'An account with this email already exists.' });
+        }
+
+        const newUser = {
+          id: newUserId,
+          name,
+          email,
+          password,
+          role,
+          status,
+          createdAt: now.toISOString(),
+          lastLogin: now.toISOString(),
+          loginHistory: [{
+            timestamp: now.toISOString(),
+            ip: '127.0.0.1',
+            userAgent: 'Created by Admin',
+            action: 'Account Provisioned'
+          }]
+        };
+
+        memoryStore.users.push(newUser);
+
+        const { password: _, ...safeUser } = newUser;
+        return res.status(201).json({ ...safeUser, orderCount: 0 });
+      }
+    } catch (error) {
+      console.error('Error creating user account:', error);
+      res.status(500).json({ error: 'Failed to create user account.' });
+    }
+  });
+
+  // Update User Status or Role (Preserve all historical records, no permanent delete)
+  app.patch('/api/auth/users/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, role, name } = req.body;
+      const { isConnected } = await getDbStatus();
+
+      if (status && !['Active', 'Suspended', 'Disabled'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status value.' });
+      }
+
+      if (role && !['customer', 'staff', 'admin'].includes(role)) {
+        return res.status(400).json({ error: 'Invalid role value.' });
+      }
+
+      if (isConnected) {
+        const user = await User.findOne({ $or: [{ id }, { _id: id }] });
+        if (!user) {
+          return res.status(404).json({ error: 'User account not found.' });
+        }
+
+        if (status) user.status = status;
+        if (role) user.role = role;
+        if (name) user.name = sanitizeString(name, 100);
+
+        if (!user.loginHistory) user.loginHistory = [];
+        user.loginHistory.unshift({
+          timestamp: new Date(),
+          ip: req.ip || '127.0.0.1',
+          userAgent: 'Admin Management',
+          action: `Status updated to ${user.status}${role ? `, Role: ${role}` : ''}`
+        });
+
+        await user.save();
+
+        return res.json({
+          success: true,
+          message: 'User account updated successfully.',
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            lastLogin: user.lastLogin,
+            createdAt: user.createdAt,
+            loginHistory: user.loginHistory
+          }
+        });
+      } else {
+        const user = memoryStore.users.find(u => u.id === id);
+        if (!user) {
+          return res.status(404).json({ error: 'User account not found.' });
+        }
+
+        if (status) user.status = status;
+        if (role) user.role = role;
+        if (name) user.name = sanitizeString(name, 100);
+
+        if (!user.loginHistory) user.loginHistory = [];
+        user.loginHistory.unshift({
+          timestamp: new Date().toISOString(),
+          ip: '127.0.0.1',
+          userAgent: 'Admin Management',
+          action: `Status updated to ${user.status}${role ? `, Role: ${role}` : ''}`
+        });
+
+        const { password: _, ...safeUser } = user;
+        return res.json({
+          success: true,
+          message: 'User account updated successfully.',
+          user: safeUser
+        });
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ error: 'Failed to update user account.' });
+    }
+  });
+
   // 7. Products REST API
   app.use('/api/products', productRoutes);
 
-  // 8. Inventory REST API
+  // 8. Categories REST API
+  app.use('/api/categories', categoryRoutes);
+
+  // 9. Inventory REST API
   app.use('/api/inventory', inventoryRoutes);
 
-  // 9. Orders & Sales REST API
+  // 10. Orders & Sales REST API
   app.use('/api/orders', orderRoutes);
   app.use('/api/sales', orderRoutes);
 
@@ -364,7 +642,9 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🚀 Server running at:`);
+    console.log(`   - Local:   http://localhost:${PORT}`);
+    console.log(`   - Network: http://127.0.0.1:${PORT}`);
   });
 }
 

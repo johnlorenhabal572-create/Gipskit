@@ -423,30 +423,11 @@ router.patch('/:id/payment', async (req: Request, res: Response) => {
   }
 });
 
-// 8. DELETE /api/orders/:id - Delete order
+// 8. DELETE /api/orders/:id - Safeguard order history (deletion forbidden)
 router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { isConnected } = await getDbStatus();
-
-    if (isConnected) {
-      const deleted = await Order.findOneAndDelete({ id });
-      if (!deleted) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-      return res.json({ success: true, message: 'Order deleted successfully' });
-    }
-
-    const initialLen = memoryStore.orders.length;
-    memoryStore.orders = memoryStore.orders.filter(o => o.id !== id);
-    if (memoryStore.orders.length === initialLen) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    return res.json({ success: true, message: 'Order deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting order:', error);
-    res.status(500).json({ error: 'Failed to delete order' });
-  }
+  return res.status(403).json({ 
+    error: 'Order history records cannot be deleted to maintain store audit compliance. Please update the order status to Cancelled if needed.' 
+  });
 });
 
 export default router;

@@ -29,12 +29,14 @@ const LoginPage = () => {
   const [showSignInPassword, setShowSignInPassword] = useState(false);
 
   // Sign Up Multi-step State
-  // Step 1 = Enter Gmail (Username)
+  // Step 1 = Enter Full Name & Gmail + Privacy Policy Check
   // Step 2 = Enter 6-digit Verification Code
   // Step 3 = Create Password (8 chars, 1 uppercase, 1 number)
   const [signUpStep, setSignUpStep] = useState<1 | 2 | 3>(1);
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpName, setSignUpName] = useState('');
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
   const [signUpPassword, setSignUpPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -103,7 +105,7 @@ const LoginPage = () => {
 
     const cleanEmail = signInEmail.trim();
     if (!cleanEmail) {
-      setError('Please enter your Gmail / username.');
+      setError('Please enter your Gmail address.');
       return;
     }
 
@@ -131,6 +133,12 @@ const LoginPage = () => {
     setError('');
     setInfoMsg('');
 
+    const cleanName = signUpName.trim();
+    if (!cleanName) {
+      setError('Full Name is required.');
+      return;
+    }
+
     const cleanEmail = signUpEmail.trim().toLowerCase();
     if (!cleanEmail) {
       setError('Please enter your Gmail address.');
@@ -138,7 +146,12 @@ const LoginPage = () => {
     }
 
     if (!isGmailValid(cleanEmail)) {
-      setError('Username must be a valid Gmail account ending in @gmail.com');
+      setError('Please enter a valid Gmail account ending in @gmail.com');
+      return;
+    }
+
+    if (!agreedToPrivacy) {
+      setError('You must agree to the Privacy Policy before proceeding.');
       return;
     }
 
@@ -256,11 +269,11 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4 bg-gray-50/50">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg border border-gray-100 overflow-hidden">
+    <div className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6">
+      <div className="bg-white rounded-xl w-full max-w-md border border-gray-200 overflow-hidden">
         
         {/* Navigation Tabs (Sign In / Sign Up) */}
-        <div className="flex border-b border-gray-100 bg-gray-50/60 p-2 gap-2">
+        <div className="flex border-b border-gray-200 bg-gray-50 p-1.5 gap-1.5">
           <button 
             type="button"
             id="tab-signin"
@@ -269,13 +282,13 @@ const LoginPage = () => {
               setError(''); 
               setInfoMsg(''); 
             }}
-            className={`flex-1 py-3.5 px-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'signin' 
-                ? 'bg-white text-dark shadow-sm border border-gray-100' 
-                : 'text-gray-400 hover:text-dark'
+                ? 'bg-white text-dark border border-gray-200' 
+                : 'text-gray-500 hover:text-dark'
             }`}
           >
-            <LogIn size={16} className={activeTab === 'signin' ? 'text-primary' : ''} />
+            <LogIn size={15} className={activeTab === 'signin' ? 'text-primary' : ''} />
             Sign In
           </button>
           
@@ -286,47 +299,47 @@ const LoginPage = () => {
               setActiveTab('signup'); 
               resetSignUpFlow();
             }}
-            className={`flex-1 py-3.5 px-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'signup' 
-                ? 'bg-white text-dark shadow-sm border border-gray-100' 
-                : 'text-gray-400 hover:text-dark'
+                ? 'bg-white text-dark border border-gray-200' 
+                : 'text-gray-500 hover:text-dark'
             }`}
           >
-            <UserPlus size={16} className={activeTab === 'signup' ? 'text-primary' : ''} />
+            <UserPlus size={15} className={activeTab === 'signup' ? 'text-primary' : ''} />
             Sign Up
           </button>
         </div>
 
-        <div className="p-8 sm:p-10">
+        <div className="p-6 sm:p-8">
           
           {/* Alerts & Notifications */}
           <AnimatePresence>
             {error && (
               <motion.div 
-                initial={{ opacity: 0, y: -8 }}
+                initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="bg-red-50 text-red-600 p-4 rounded-2xl mb-6 text-xs font-bold border border-red-100 flex items-start gap-3"
+                exit={{ opacity: 0, y: -4 }}
+                className="bg-red-50 text-red-700 p-3.5 rounded-lg mb-5 text-xs font-bold border border-red-200 flex items-start gap-2.5"
               >
-                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{error}</span>
               </motion.div>
             )}
             
             {infoMsg && (
               <motion.div 
-                initial={{ opacity: 0, y: -8 }}
+                initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="bg-green-50 text-green-700 p-4 rounded-2xl mb-6 text-xs font-bold border border-green-100 flex items-start gap-3"
+                exit={{ opacity: 0, y: -4 }}
+                className="bg-green-50 text-green-800 p-3.5 rounded-lg mb-5 text-xs font-bold border border-green-200 flex items-start gap-2.5"
               >
-                <CheckCircle2 size={18} className="shrink-0 mt-0.5 text-green-600" />
+                <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-green-600" />
                 <div className="flex-1">
                   <p className="leading-relaxed">{infoMsg}</p>
                   {previewCode && (
-                    <div className="mt-2.5 bg-white/90 p-2.5 rounded-xl border border-green-200 inline-block">
-                      <span className="text-[10px] uppercase font-black tracking-wider text-gray-500 block mb-0.5">Verification Code</span>
-                      <span className="font-mono text-base font-black text-primary tracking-widest">{previewCode}</span>
+                    <div className="mt-2 bg-white p-2 rounded border border-green-300 inline-block">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 block mb-0.5">Verification Code</span>
+                      <span className="font-mono text-sm font-black text-primary tracking-widest">{previewCode}</span>
                     </div>
                   )}
                 </div>
@@ -339,62 +352,62 @@ const LoginPage = () => {
           {/* ================================================================= */}
           {activeTab === 'signin' && (
             <div>
-              <div className="flex flex-col items-center text-center mb-8">
-                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-4 shadow-inner">
-                  <LogIn size={28} />
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-dark mb-3 border border-gray-200">
+                  <LogIn size={22} />
                 </div>
-                <h2 className="text-3xl font-black text-dark tracking-tight">
+                <h2 className="text-2xl font-black text-dark tracking-tight">
                   Welcome Back
                 </h2>
-                <p className="text-gray-400 text-sm mt-2">
-                  Sign in with your Gmail username and password
+                <p className="text-gray-500 text-xs mt-1">
+                  Sign in with your registered Gmail address and password
                 </p>
               </div>
 
               <form onSubmit={handleSignIn} className="space-y-4">
-                {/* Step 1: Enter Gmail (Username) */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                    Gmail (Username)
+                {/* Enter Gmail */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Gmail Address
                   </label>
                   <div className="relative group">
-                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                     <input 
                       type="email" 
                       id="signin-email-input"
                       value={signInEmail}
                       onChange={(e) => setSignInEmail(e.target.value)}
                       placeholder="yourname@gmail.com"
-                      className="w-full bg-gray-50 border border-gray-100 p-4 pl-12 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                      className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                       required
                       autoFocus
                     />
                   </div>
                 </div>
 
-                {/* Step 2: Enter Password */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                {/* Enter Password */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                     Password
                   </label>
                   <div className="relative group">
-                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                     <input 
                       type={showSignInPassword ? 'text' : 'password'}
                       id="signin-password-input"
                       value={signInPassword}
                       onChange={(e) => setSignInPassword(e.target.value)}
                       placeholder="Enter your password"
-                      className="w-full bg-gray-50 border border-gray-100 p-4 pl-12 pr-12 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                      className="w-full bg-white border border-gray-300 p-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                       required
                     />
                     <button 
                       type="button"
                       onClick={() => setShowSignInPassword(!showSignInPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
                       tabIndex={-1}
                     >
-                      {showSignInPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
@@ -403,26 +416,26 @@ const LoginPage = () => {
                   type="submit" 
                   id="signin-submit-btn"
                   disabled={loading}
-                  className="w-full bg-dark text-white py-4 rounded-2xl hover:bg-primary font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-gray-200 mt-6 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
-                    <RefreshCw size={18} className="animate-spin" />
+                    <RefreshCw size={16} className="animate-spin" />
                   ) : (
                     <>
                       <span>Sign In</span>
-                      <ArrowRight size={16} />
+                      <ArrowRight size={14} />
                     </>
                   )}
                 </button>
               </form>
 
-              <div className="mt-8 text-center">
-                <p className="text-xs text-gray-400">
+              <div className="mt-6 text-center border-t border-gray-100 pt-4">
+                <p className="text-xs text-gray-500">
                   Don't have an account yet?{' '}
                   <button 
                     type="button"
                     onClick={() => { setActiveTab('signup'); resetSignUpFlow(); }}
-                    className="font-black text-primary hover:underline ml-1"
+                    className="font-bold text-dark hover:text-primary transition-colors ml-1"
                   >
                     Create Account
                   </button>
@@ -437,57 +450,57 @@ const LoginPage = () => {
           {activeTab === 'signup' && (
             <div>
               {/* Progress Indicator */}
-              <div className="mb-8">
+              <div className="mb-6">
                 <div className="flex items-center justify-between relative mb-2">
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-gray-100 w-full -z-0"></div>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-gray-200 w-full -z-0"></div>
                   <div 
-                    className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-primary transition-all duration-300 -z-0"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-dark transition-all duration-300 -z-0"
                     style={{ width: signUpStep === 1 ? '0%' : signUpStep === 2 ? '50%' : '100%' }}
                   ></div>
 
                   {/* Step 1 Pill */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black z-10 transition-all ${
-                    signUpStep >= 1 ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-400'
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                    signUpStep >= 1 ? 'bg-dark text-white' : 'bg-gray-200 text-gray-500'
                   }`}>
-                    {signUpStep > 1 ? <Check size={14} /> : '1'}
+                    {signUpStep > 1 ? <Check size={13} /> : '1'}
                   </div>
 
                   {/* Step 2 Pill */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black z-10 transition-all ${
-                    signUpStep >= 2 ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-400'
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                    signUpStep >= 2 ? 'bg-dark text-white' : 'bg-gray-200 text-gray-500'
                   }`}>
-                    {signUpStep > 2 ? <Check size={14} /> : '2'}
+                    {signUpStep > 2 ? <Check size={13} /> : '2'}
                   </div>
 
                   {/* Step 3 Pill */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black z-10 transition-all ${
-                    signUpStep === 3 ? 'bg-primary text-white shadow-md' : 'bg-gray-100 text-gray-400'
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                    signUpStep === 3 ? 'bg-dark text-white' : 'bg-gray-200 text-gray-500'
                   }`}>
                     3
                   </div>
                 </div>
 
-                <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-gray-400 px-1">
-                  <span>1. Enter Gmail</span>
-                  <span>2. Verify Code</span>
-                  <span>3. Create Password</span>
+                <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500 px-0.5">
+                  <span>1. Details</span>
+                  <span>2. Verify</span>
+                  <span>3. Password</span>
                 </div>
               </div>
 
               {/* ------------------------------------------------------------- */}
-              {/* SIGN UP STEP 1: Enter Gmail (Username) */}
+              {/* SIGN UP STEP 1: Enter Full Name, Gmail & Privacy Agreement */}
               {/* ------------------------------------------------------------- */}
               {signUpStep === 1 && (
                 <div>
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-black text-dark tracking-tight">Create Account</h3>
-                    <p className="text-gray-400 text-xs mt-1">Your Gmail address will act as your username</p>
+                  <div className="text-center mb-5">
+                    <h3 className="text-xl font-black text-dark tracking-tight">Create Account</h3>
+                    <p className="text-gray-500 text-xs mt-0.5">Enter your full name and valid Gmail address</p>
                   </div>
 
                   <form onSubmit={handleSendVerificationCode} className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                        Full Name (Optional)
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Full Name <span className="text-primary">*</span>
                       </label>
                       <input 
                         type="text" 
@@ -495,42 +508,66 @@ const LoginPage = () => {
                         value={signUpName}
                         onChange={(e) => setSignUpName(e.target.value)}
                         placeholder="e.g. Juan Dela Cruz"
-                        className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                        className="w-full bg-white border border-gray-300 p-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
+                        required
+                        autoFocus
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Gmail Address <span className="text-primary">*</span>
                       </label>
                       <div className="relative group">
-                        <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                         <input 
                           type="email" 
                           id="signup-email-input"
                           value={signUpEmail}
                           onChange={(e) => setSignUpEmail(e.target.value)}
-                          placeholder="username@gmail.com"
-                          className="w-full bg-gray-50 border border-gray-100 p-4 pl-12 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                          placeholder="yourname@gmail.com"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
-                          autoFocus
                         />
                       </div>
-                      <p className="text-[10px] text-gray-400 ml-1">Must be a valid Gmail account (e.g. name@gmail.com)</p>
+                      <p className="text-[11px] text-gray-500">Must be a valid Gmail account (e.g. name@gmail.com)</p>
+                    </div>
+
+                    {/* Privacy Policy Checkbox */}
+                    <div className="flex items-start gap-2.5 pt-2">
+                      <input
+                        type="checkbox"
+                        id="privacy-policy-checkbox"
+                        checked={agreedToPrivacy}
+                        onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-dark focus:ring-dark cursor-pointer shrink-0"
+                        required
+                      />
+                      <label htmlFor="privacy-policy-checkbox" className="text-xs text-gray-600 leading-relaxed cursor-pointer select-none">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowPrivacyModal(true)}
+                          className="text-primary font-bold hover:underline inline"
+                        >
+                          Privacy Policy
+                        </button>{' '}
+                        and consent to the processing of my information for verification and orders.
+                      </label>
                     </div>
 
                     <button 
                       type="submit" 
                       id="signup-sendcode-btn"
-                      disabled={loading}
-                      className="w-full bg-dark text-white py-4 rounded-2xl hover:bg-primary font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-gray-200 mt-6 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={loading || !agreedToPrivacy || !signUpName.trim() || !signUpEmail.trim()}
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {loading ? (
-                        <RefreshCw size={18} className="animate-spin" />
+                        <RefreshCw size={16} className="animate-spin" />
                       ) : (
                         <>
                           <span>Send Verification Code</span>
-                          <ArrowRight size={16} />
+                          <ArrowRight size={14} />
                         </>
                       )}
                     </button>
@@ -543,16 +580,16 @@ const LoginPage = () => {
               {/* ------------------------------------------------------------- */}
               {signUpStep === 2 && (
                 <div>
-                  <div className="text-center mb-6">
-                    <h3 className="text-2xl font-black text-dark tracking-tight">Enter Verification Code</h3>
-                    <p className="text-gray-400 text-xs mt-1">
+                  <div className="text-center mb-5">
+                    <h3 className="text-xl font-black text-dark tracking-tight">Enter Verification Code</h3>
+                    <p className="text-gray-500 text-xs mt-0.5">
                       Sent to <strong className="text-dark">{signUpEmail}</strong>
                     </p>
                   </div>
 
-                  <form onSubmit={handleVerifyCode} className="space-y-6">
+                  <form onSubmit={handleVerifyCode} className="space-y-5">
                     <div>
-                      <div className="flex justify-center gap-2 sm:gap-3">
+                      <div className="flex justify-center gap-2">
                         {otpCode.map((digit, index) => (
                           <input
                             key={index}
@@ -564,7 +601,7 @@ const LoginPage = () => {
                             value={digit}
                             onChange={(e) => handleOtpChange(index, e.target.value)}
                             onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                            className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-black text-dark bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-primary focus:bg-white focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                            className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-black text-dark bg-white border border-gray-300 rounded-lg focus:border-dark transition-colors outline-none"
                             autoComplete="one-time-code"
                             inputMode="numeric"
                           />
@@ -576,13 +613,13 @@ const LoginPage = () => {
                       type="submit" 
                       id="signup-verifycode-btn"
                       disabled={loading || otpCode.join('').length !== 6}
-                      className="w-full bg-dark text-white py-4 rounded-2xl hover:bg-primary font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-gray-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40"
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-40"
                     >
                       {loading ? (
-                        <RefreshCw size={18} className="animate-spin" />
+                        <RefreshCw size={16} className="animate-spin" />
                       ) : (
                         <>
-                          <ShieldCheck size={18} />
+                          <ShieldCheck size={16} />
                           <span>Verify Code</span>
                         </>
                       )}
@@ -592,7 +629,7 @@ const LoginPage = () => {
                       <button
                         type="button"
                         onClick={() => { setSignUpStep(1); setError(''); }}
-                        className="text-gray-400 hover:text-dark font-bold underline"
+                        className="text-gray-500 hover:text-dark font-medium underline"
                       >
                         Change Gmail
                       </button>
@@ -601,7 +638,7 @@ const LoginPage = () => {
                         type="button"
                         disabled={resendCooldown > 0 || loading}
                         onClick={() => handleSendVerificationCode()}
-                        className="text-primary hover:text-dark font-bold disabled:text-gray-300"
+                        className="text-dark hover:text-primary font-bold disabled:text-gray-400"
                       >
                         {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
                       </button>
@@ -615,22 +652,22 @@ const LoginPage = () => {
               {/* ------------------------------------------------------------- */}
               {signUpStep === 3 && (
                 <div>
-                  <div className="text-center mb-6">
-                    <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
-                      <KeyRound size={22} />
+                  <div className="text-center mb-5">
+                    <div className="w-10 h-10 bg-green-50 text-green-700 border border-green-200 rounded-lg flex items-center justify-center mx-auto mb-2">
+                      <KeyRound size={18} />
                     </div>
-                    <h3 className="text-2xl font-black text-dark tracking-tight">Create Password</h3>
-                    <p className="text-gray-400 text-xs mt-1">Set a secure 8-character password for {signUpEmail}</p>
+                    <h3 className="text-xl font-black text-dark tracking-tight">Create Password</h3>
+                    <p className="text-gray-500 text-xs mt-0.5">Set a secure 8-character password for {signUpEmail}</p>
                   </div>
 
                   <form onSubmit={handleCompleteSignUp} className="space-y-4">
                     {/* Password Input */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                         New Password (8 characters)
                       </label>
                       <div className="relative group">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                        <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                         <input 
                           type={showSignUpPassword ? 'text' : 'password'}
                           id="signup-password-input"
@@ -638,28 +675,28 @@ const LoginPage = () => {
                           value={signUpPassword}
                           onChange={(e) => setSignUpPassword(e.target.value)}
                           placeholder="e.g. Pass1234"
-                          className="w-full bg-gray-50 border border-gray-100 p-4 pl-12 pr-12 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                           autoFocus
                         />
                         <button 
                           type="button"
                           onClick={() => setShowSignUpPassword(!showSignUpPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
                           tabIndex={-1}
                         >
-                          {showSignUpPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showSignUpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
                     </div>
 
                     {/* Confirm Password Input */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                         Confirm Password
                       </label>
                       <div className="relative group">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                        <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
                         <input 
                           type={showSignUpPassword ? 'text' : 'password'}
                           id="signup-confirmpassword-input"
@@ -667,31 +704,31 @@ const LoginPage = () => {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Re-enter 8-character password"
-                          className="w-full bg-gray-50 border border-gray-100 p-4 pl-12 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-bold text-dark text-sm placeholder:text-gray-300"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                         />
                       </div>
                     </div>
 
                     {/* Password Rules Live Checklist */}
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Password Requirements:</p>
-                      <div className="space-y-1.5 text-xs font-bold">
-                        <div className={`flex items-center gap-2 ${passwordRules.exactEightChars ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordRules.exactEightChars ? <Check size={14} className="text-green-600" /> : <X size={14} className="text-gray-300" />}
+                    <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Password Requirements:</p>
+                      <div className="space-y-1 text-xs font-medium">
+                        <div className={`flex items-center gap-2 ${passwordRules.exactEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {passwordRules.exactEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
                           <span>Exactly 8 characters total ({signUpPassword.length}/8)</span>
                         </div>
-                        <div className={`flex items-center gap-2 ${passwordRules.hasUppercase ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordRules.hasUppercase ? <Check size={14} className="text-green-600" /> : <X size={14} className="text-gray-300" />}
+                        <div className={`flex items-center gap-2 ${passwordRules.hasUppercase ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {passwordRules.hasUppercase ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
                           <span>At least 1 uppercase / capital letter (A-Z)</span>
                         </div>
-                        <div className={`flex items-center gap-2 ${passwordRules.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordRules.hasNumber ? <Check size={14} className="text-green-600" /> : <X size={14} className="text-gray-300" />}
+                        <div className={`flex items-center gap-2 ${passwordRules.hasNumber ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {passwordRules.hasNumber ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
                           <span>At least 1 number (0-9)</span>
                         </div>
                         {confirmPassword.length > 0 && (
-                          <div className={`flex items-center gap-2 ${passwordRules.passwordsMatch ? 'text-green-600' : 'text-red-500'}`}>
-                            {passwordRules.passwordsMatch ? <Check size={14} className="text-green-600" /> : <X size={14} className="text-red-500" />}
+                          <div className={`flex items-center gap-2 ${passwordRules.passwordsMatch ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}`}>
+                            {passwordRules.passwordsMatch ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-red-500" />}
                             <span>{passwordRules.passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</span>
                           </div>
                         )}
@@ -702,13 +739,13 @@ const LoginPage = () => {
                       type="submit" 
                       id="signup-complete-btn"
                       disabled={loading || !isPasswordFullyValid || signUpPassword !== confirmPassword}
-                      className="w-full bg-dark text-white py-4 rounded-2xl hover:bg-primary font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-gray-200 mt-6 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40"
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-40"
                     >
                       {loading ? (
-                        <RefreshCw size={18} className="animate-spin" />
+                        <RefreshCw size={16} className="animate-spin" />
                       ) : (
                         <>
-                          <CheckCircle2 size={18} />
+                          <CheckCircle2 size={16} />
                           <span>Create Account & Sign In</span>
                         </>
                       )}
@@ -717,13 +754,13 @@ const LoginPage = () => {
                 </div>
               )}
 
-              <div className="mt-8 text-center">
-                <p className="text-xs text-gray-400">
+              <div className="mt-6 text-center border-t border-gray-100 pt-4">
+                <p className="text-xs text-gray-500">
                   Already have an account?{' '}
                   <button 
                     type="button"
                     onClick={() => { setActiveTab('signin'); setError(''); }}
-                    className="font-black text-primary hover:underline ml-1"
+                    className="font-bold text-dark hover:text-primary transition-colors ml-1"
                   >
                     Sign In
                   </button>
@@ -734,6 +771,60 @@ const LoginPage = () => {
 
         </div>
       </div>
+
+      {/* Privacy Policy Modal */}
+      <AnimatePresence>
+        {showPrivacyModal && (
+          <div 
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowPrivacyModal(false)}
+          >
+            <div 
+              className="bg-white rounded-xl border border-gray-200 max-w-lg w-full overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 className="text-base font-black text-dark uppercase tracking-wide flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-primary" /> Privacy Policy
+                </h3>
+                <button 
+                  onClick={() => setShowPrivacyModal(false)} 
+                  className="text-gray-400 hover:text-dark p-1 rounded transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto text-xs text-gray-600 leading-relaxed">
+                <div>
+                  <h4 className="font-bold text-dark text-sm mb-1">1. Information We Collect</h4>
+                  <p>When you create an account or place an order with Gip's Kitchen, we collect your full name, Gmail address, contact number, and order details to prepare and fulfill your takeout/pickup requests.</p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-dark text-sm mb-1">2. How We Use Your Data</h4>
+                  <p>Your details are used strictly for order tracking, payment verification (such as receipt validation), security authorization, and customer communication regarding your menu orders.</p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-dark text-sm mb-1">3. Data Protection & Security</h4>
+                  <p>We implement secure database standards and authentication measures. We never sell, rent, or share your personal data with unauthorized third parties.</p>
+                </div>
+                <div>
+                  <h4 className="font-bold text-dark text-sm mb-1">4. Your Consent</h4>
+                  <p>By registering and checking the agreement box, you acknowledge that you understand and agree to the storage and processing of your details for using the Gip's Kitchen platform.</p>
+                </div>
+              </div>
+              <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => { setAgreedToPrivacy(true); setShowPrivacyModal(false); }}
+                  className="bg-dark text-white px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-primary transition-colors"
+                >
+                  I Understand & Agree
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

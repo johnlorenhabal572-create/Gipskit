@@ -1,80 +1,311 @@
-import { useContext } from 'react';
+import { useState, useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, ShoppingBag } from 'lucide-react';
+import { LogIn, ShoppingBag, Eye, X, Check, Package, Tag, AlertCircle } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 
 const ProductCard = ({ product }: { product: any }) => {
   const { addToCart } = useContext(CartContext) as any;
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [modalQty, setModalQty] = useState(1);
+  const [addedNotice, setAddedNotice] = useState(false);
+
   const isAvailable = product.status !== 'Not Available' && (product.stock === undefined || product.stock > 0);
 
-  const handleAction = () => {
+  const handleAddToCart = (qty = 1) => {
     if (!user) {
       navigate('/login', { state: { from: { pathname: '/menu' } } });
       return;
     }
     if (isAvailable) {
-      addToCart(product);
+      for (let i = 0; i < qty; i++) {
+        addToCart(product);
+      }
+      setAddedNotice(true);
+      setTimeout(() => setAddedNotice(false), 1800);
     }
   };
 
   return (
-    <div className={`border rounded-3xl shadow-sm p-5 bg-white flex flex-col justify-between transition-all ${!isAvailable ? 'opacity-75 grayscale-[0.5]' : 'hover:shadow-md'}`}>
-      <div>
-        <div className="aspect-square rounded-2xl mb-4 overflow-hidden bg-gray-100 relative">
-          <img 
-            src={product.image} 
-            alt={product.name} 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-          {!isAvailable && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
-              <span className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
-                Not Available
+    <>
+      <div className={`border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between transition-all duration-200 ${!isAvailable ? 'opacity-70 bg-gray-50' : 'hover:border-dark/60 hover:shadow-sm'}`}>
+        <div>
+          <div 
+            className="aspect-square rounded-lg mb-3 overflow-hidden bg-gray-100 relative border border-gray-100 group cursor-pointer"
+            onClick={() => setShowDetailModal(true)}
+          >
+            <img 
+              src={product.image} 
+              alt={product.name} 
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="bg-white/95 text-dark px-3 py-1.5 rounded-lg text-xs font-bold shadow flex items-center gap-1.5">
+                <Eye size={14} /> View Details
               </span>
             </div>
+            {!isAvailable && (
+              <div className="absolute inset-0 bg-dark/70 flex items-center justify-center">
+                <span className="bg-white text-dark px-3 py-1 rounded text-[11px] font-bold uppercase tracking-wider border border-gray-300">
+                  Out of Stock
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-start mb-1">
+            <h3 
+              onClick={() => setShowDetailModal(true)}
+              className="font-bold text-dark text-sm leading-tight cursor-pointer hover:text-primary transition-colors"
+            >
+              {product.name}
+            </h3>
+            <span className="text-primary font-black text-sm ml-2 shrink-0">₱{product.price}</span>
+          </div>
+
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{product.category}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
+              product.stock <= 5 
+                ? 'bg-red-50 text-red-600 border-red-200' 
+                : 'bg-gray-50 text-gray-500 border-gray-200'
+            }`}>
+              Stock: {product.stock}
+            </span>
+          </div>
+
+          {/* Short description preview if available */}
+          {product.description && (
+            <p className="text-xs text-gray-500 line-clamp-2 mb-3 leading-relaxed">
+              {product.description}
+            </p>
           )}
         </div>
-        <div className="flex justify-between items-start mb-1">
-          <h3 className="font-bold text-dark">{product.name}</h3>
-          <span className="text-primary font-bold">₱{product.price}</span>
-        </div>
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.category}</p>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${product.stock <= 5 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
-            Stock: {product.stock}
-          </span>
+        
+        {/* Action Buttons: View & Add to Cart */}
+        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
+          <button 
+            type="button"
+            id={`product-view-btn-${product.id}`}
+            onClick={() => setShowDetailModal(true)}
+            className="w-full py-2 px-2.5 rounded-lg font-bold text-xs bg-gray-50 text-dark hover:bg-gray-100 border border-gray-200 transition-colors flex items-center justify-center gap-1.5 uppercase tracking-wider"
+          >
+            <Eye size={14} />
+            <span>View</span>
+          </button>
+
+          {!user ? (
+            <button 
+              type="button"
+              id={`product-signin-btn-${product.id}`}
+              onClick={() => handleAddToCart(1)}
+              className="w-full py-2 px-2 rounded-lg font-bold text-xs bg-dark text-white hover:bg-primary transition-colors flex items-center justify-center gap-1 uppercase tracking-wider"
+            >
+              <LogIn size={14} />
+              <span>Order</span>
+            </button>
+          ) : (
+            <button 
+              type="button"
+              id={`product-addcart-btn-${product.id}`}
+              onClick={() => handleAddToCart(1)}
+              disabled={!isAvailable}
+              className={`w-full py-2 px-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1 uppercase tracking-wider ${
+                isAvailable 
+                  ? addedNotice 
+                    ? 'bg-green-600 text-white border border-green-600'
+                    : 'bg-dark text-white hover:bg-primary border border-transparent active:translate-y-0.5' 
+                  : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+              }`}
+            >
+              {addedNotice ? (
+                <>
+                  <Check size={14} />
+                  <span>Added</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag size={14} />
+                  <span>{isAvailable ? 'Add' : 'Out'}</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
-      
-      {!user ? (
-        <button 
-          id={`product-signin-btn-${product.id}`}
-          onClick={handleAction}
-          className="w-full py-3 rounded-xl transition-all font-bold text-sm bg-primary/10 text-primary hover:bg-primary hover:text-white shadow-sm flex items-center justify-center gap-2 border border-primary/20 active:scale-95"
-        >
-          <LogIn size={16} />
-          <span>Sign In</span>
-        </button>
-      ) : (
-        <button 
-          id={`product-addcart-btn-${product.id}`}
-          onClick={handleAction}
-          disabled={!isAvailable}
-          className={`w-full py-3 rounded-xl transition-all font-bold text-sm flex items-center justify-center gap-2 ${
-            isAvailable 
-              ? 'bg-dark text-white hover:bg-primary shadow-lg shadow-dark/10 active:scale-95' 
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-          }`}
-        >
-          <ShoppingBag size={16} />
-          <span>{isAvailable ? 'Add to Cart' : 'Out of Stock'}</span>
-        </button>
-      )}
-    </div>
+
+      {/* Product Details & Description Modal */}
+      <AnimatePresence>
+        {showDetailModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowDetailModal(false)}
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative bg-white w-full max-w-lg rounded-2xl border border-gray-200 shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-dark">
+                    {product.category}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
+                    isAvailable ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                  }`}>
+                    {isAvailable ? `In Stock (${product.stock})` : 'Out of Stock'}
+                  </span>
+                </div>
+
+                <button 
+                  id="close-product-detail-modal"
+                  onClick={() => setShowDetailModal(false)}
+                  className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-dark hover:bg-gray-100 flex items-center justify-center transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+                {/* Image */}
+                <div className="aspect-video w-full rounded-xl overflow-hidden bg-gray-100 border border-gray-200 relative">
+                  <img 
+                    src={product.image} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                {/* Title & Price */}
+                <div>
+                  <div className="flex justify-between items-start gap-4">
+                    <h2 className="text-xl font-black text-dark tracking-tight leading-tight">
+                      {product.name}
+                    </h2>
+                    <span className="text-2xl font-black text-primary shrink-0">
+                      ₱{product.price}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Product Description Section */}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-2">
+                  <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <Tag size={13} className="text-primary" /> Product Description
+                  </h4>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line font-medium">
+                    {product.description && product.description.trim() ? (
+                      product.description
+                    ) : (
+                      <span className="text-gray-400 italic">
+                        Delicious, freshly prepared dish crafted with premium ingredients and authentic seasonings.
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Extra Details */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-white border border-gray-200 p-3 rounded-lg flex items-center gap-2.5">
+                    <Package size={16} className="text-gray-400" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-400">Available Stock</p>
+                      <p className="font-bold text-dark">{product.stock} units</p>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-200 p-3 rounded-lg flex items-center gap-2.5">
+                    <Tag size={16} className="text-gray-400" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-400">Menu Category</p>
+                      <p className="font-bold text-dark">{product.category}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer / Add to Cart Actions */}
+              <div className="p-4 sm:p-5 border-t border-gray-200 bg-gray-50 flex items-center gap-3">
+                {isAvailable && (
+                  <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden shrink-0">
+                    <button 
+                      type="button"
+                      onClick={() => setModalQty(Math.max(1, modalQty - 1))}
+                      className="w-9 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold"
+                    >
+                      -
+                    </button>
+                    <span className="w-10 text-center font-bold text-sm text-dark">
+                      {modalQty}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => setModalQty(Math.min(product.stock || 99, modalQty + 1))}
+                      className="w-9 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+
+                <button 
+                  type="button"
+                  id={`modal-addcart-btn-${product.id}`}
+                  onClick={() => {
+                    handleAddToCart(modalQty);
+                    if (user) {
+                      setTimeout(() => setShowDetailModal(false), 500);
+                    }
+                  }}
+                  disabled={!isAvailable}
+                  className={`flex-1 py-3 px-4 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm ${
+                    !isAvailable 
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : addedNotice
+                        ? 'bg-green-600 text-white'
+                        : 'bg-dark text-white hover:bg-primary active:translate-y-0.5'
+                  }`}
+                >
+                  {!user ? (
+                    <>
+                      <LogIn size={16} />
+                      <span>Sign In to Order</span>
+                    </>
+                  ) : addedNotice ? (
+                    <>
+                      <Check size={16} />
+                      <span>Added to Cart!</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag size={16} />
+                      <span>
+                        {isAvailable 
+                          ? `Add to Cart (₱${product.price * modalQty})` 
+                          : 'Currently Unavailable'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

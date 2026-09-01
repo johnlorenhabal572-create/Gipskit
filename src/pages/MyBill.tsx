@@ -62,113 +62,117 @@ const MyBill = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl py-12">
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-8 sm:py-12">
+      <div className="mb-8">
+        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">My Bill</h1>
+        <p className="text-xs text-gray-500 mt-1">Settle pending payments for your in-store pickup orders</p>
+      </div>
 
       {bills.length === 0 ? (
-        <div className="bg-white rounded-[3rem] p-16 text-center border-2 border-dashed border-gray-100 shadow-sm">
-          <div className="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShoppingBag size={48} className="text-gray-200" />
+        <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+          <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
+            <ShoppingBag size={28} className="text-gray-400" />
           </div>
-          <h3 className="text-2xl font-bold text-gray-800 mb-2">No Bills Found</h3>
-          <p className="text-gray-400 max-w-xs mx-auto font-medium">Any new orders requiring payment will appear here!</p>
+          <h3 className="text-lg font-bold text-dark mb-1">No Pending Bills Found</h3>
+          <p className="text-gray-500 text-xs max-w-xs mx-auto font-medium">Any new orders requiring payment will appear here.</p>
           <button 
             onClick={() => navigate('/menu')}
-            className="mt-8 bg-primary text-white px-8 py-3 rounded-full font-bold hover:bg-opacity-90 transition-all shadow-lg shadow-primary/20"
+            className="mt-6 bg-primary text-white px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors"
           >
-            Order Something Delicious
+            Browse Menu
           </button>
         </div>
       ) : (
-        <div className="grid gap-8">
+        <div className="grid gap-6">
           {bills.map(bill => (
-            <div key={bill.id} className="bg-white rounded-[3rem] shadow-2xl border border-gray-50 overflow-hidden group hover:border-primary/20 transition-all">
-              <div className="bg-dark p-8 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div key={bill.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-dark p-5 sm:p-6 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Order Transaction ID</p>
-                  <h3 className="text-2xl font-bold font-mono tracking-tighter">{bill.id}</h3>
-                  <div className="flex gap-2 mt-2">
-                    {bill.items.slice(0, 2).map((item, i) => (
-                      <span key={i} className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/80">{item.name}</span>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Order Transaction ID</p>
+                  <h3 className="text-xl font-bold font-mono tracking-tight">{bill.id}</h3>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {bill.items.slice(0, 3).map((item: any, i: number) => (
+                      <span key={i} className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200 border border-white/10">{item.name}</span>
                     ))}
-                    {bill.items.length > 2 && <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-white/80">+{bill.items.length - 2} more</span>}
+                    {bill.items.length > 3 && <span className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200">+{bill.items.length - 3} more</span>}
                   </div>
                 </div>
                 <div className="sm:text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Payable Amount</p>
-                  <h3 className="text-4xl font-black text-primary tracking-tighter">₱{bill.total}</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total Due</p>
+                  <h3 className="text-3xl font-black text-primary tracking-tight">₱{bill.total}</h3>
                 </div>
               </div>
 
-              <div className="p-10">
-                <div className="grid md:grid-cols-2 gap-12">
-                  <div className="space-y-8">
-                    <div className="bg-blue-50 p-8 rounded-[2rem] border border-blue-100 flex flex-col items-center shadow-inner">
-                      <div className="flex items-center gap-3 mb-6 text-blue-700 w-full justify-center underline decoration-blue-200 underline-offset-8 decoration-2">
-                        <QrCode size={24} />
-                        <h4 className="text-xl font-bold uppercase tracking-tight">GIP'S KITCHEN GCash</h4>
+              <div className="p-6 sm:p-8">
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="bg-blue-50/60 p-6 rounded-lg border border-blue-200 flex flex-col items-center">
+                      <div className="flex items-center gap-2 mb-4 text-blue-900 w-full justify-center">
+                        <QrCode size={20} />
+                        <h4 className="text-sm font-bold uppercase tracking-wider">Gip's Kitchen GCash</h4>
                       </div>
-                      <div className="bg-white p-6 rounded-[2.5rem] shadow-xl mb-6 flex justify-center border-4 border-blue-100 group-hover:scale-105 transition-transform">
+                      <div className="bg-white p-4 rounded-lg mb-4 flex justify-center border border-blue-200">
                         <img 
                           src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=Gcash:09123456789" 
                           alt="GCash QR Code" 
-                          className="w-56 h-56 object-contain"
+                          className="w-48 h-48 object-contain"
                         />
                       </div>
-                      <div className="text-center space-y-1">
-                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest">Account Name</p>
-                        <p className="text-xl font-black text-blue-900">GIP'S KITCHEN</p>
-                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest pt-3">Account Number</p>
-                        <p className="text-3xl font-black text-blue-700 tracking-tighter">0912 345 6789</p>
+                      <div className="text-center space-y-0.5">
+                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Account Name</p>
+                        <p className="text-base font-black text-blue-950">GIP'S KITCHEN</p>
+                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider pt-2">Account Number</p>
+                        <p className="text-2xl font-black text-blue-800 tracking-tight">0912 345 6789</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="bg-gray-100 p-2 rounded-lg text-gray-500">
-                          <Upload size={20} />
+                  <div className="flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="bg-gray-100 p-1.5 rounded text-gray-700">
+                          <Upload size={16} />
                         </div>
-                        <h4 className="text-xl font-bold text-dark">Proof of Payment</h4>
+                        <h4 className="text-sm font-bold text-dark uppercase tracking-wider">Proof of Payment</h4>
                       </div>
                       
                       {bill.paymentScreenshot ? (
-                        <div className="space-y-6">
-                          <div className="relative rounded-[2rem] overflow-hidden border-8 border-green-50 shadow-2xl aspect-[4/5] max-h-80 mx-auto">
+                        <div className="space-y-4">
+                          <div className="relative rounded-lg overflow-hidden border border-green-300 aspect-[4/5] max-h-64 mx-auto bg-gray-50">
                             <img src={bill.paymentScreenshot} alt="Receipt" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center backdrop-blur-sm">
-                              <div className="bg-white p-4 rounded-full shadow-lg">
-                                <CheckCircle2 size={48} className="text-green-500" />
+                            <div className="absolute inset-0 bg-dark/40 flex items-center justify-center">
+                              <div className="bg-white p-2 rounded-full">
+                                <CheckCircle2 size={32} className="text-green-600" />
                               </div>
                             </div>
                           </div>
-                          <div className="bg-green-50 p-4 rounded-2xl flex items-center gap-3 text-green-700 border border-green-100 font-bold text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-                            Receipt uploaded successfully!
+                          <div className="bg-green-50 p-3 rounded-lg flex items-center gap-2 text-green-800 border border-green-200 font-bold text-xs">
+                            <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+                            Receipt uploaded successfully! Ready to confirm.
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-6">
-                          <p className="text-gray-500 font-medium text-sm leading-relaxed">
-                            To process your order, please upload a <span className="text-dark font-bold">Screenshot</span> of your GCash payment receipt.
+                        <div className="space-y-4">
+                          <p className="text-gray-600 text-xs leading-relaxed">
+                            To process your order, please upload a screenshot of your GCash payment confirmation receipt.
                           </p>
                           <label className={`
-                            flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-[2rem] cursor-pointer transition-all
-                            ${uploading === bill.id ? 'bg-gray-50 border-gray-300' : 'bg-gray-50 border-gray-200 hover:border-primary hover:bg-primary/5'}
+                            flex flex-col items-center justify-center w-full h-52 border-2 border-dashed rounded-lg cursor-pointer transition-colors
+                            ${uploading === bill.id ? 'bg-gray-50 border-gray-300' : 'bg-gray-50 border-gray-300 hover:border-dark hover:bg-gray-100/50'}
                           `}>
-                            <div className="flex flex-col items-center justify-center p-6 text-center">
+                            <div className="flex flex-col items-center justify-center p-5 text-center">
                               {uploading === bill.id ? (
-                                <div className="space-y-4 flex flex-col items-center">
-                                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary border-r-2 border-gray-200"></div>
-                                  <p className="text-sm font-bold text-gray-500">Processing image...</p>
+                                <div className="space-y-2 flex flex-col items-center">
+                                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-dark border-t-transparent"></div>
+                                  <p className="text-xs font-bold text-gray-600">Processing screenshot...</p>
                                 </div>
                               ) : (
                                 <>
-                                  <div className="bg-white p-4 rounded-full shadow-sm mb-4 text-gray-300">
-                                    <Upload size={32} />
+                                  <div className="bg-white p-2.5 rounded-lg border border-gray-200 mb-3 text-gray-500">
+                                    <Upload size={24} />
                                   </div>
-                                  <p className="text-dark font-bold text-lg mb-1">Drop your receipt here</p>
-                                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">PNG, JPG or JPEG from your device</p>
+                                  <p className="text-dark font-bold text-sm mb-0.5">Click or drag screenshot here</p>
+                                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">PNG, JPG or JPEG image</p>
                                 </>
                               )}
                             </div>
@@ -178,20 +182,20 @@ const MyBill = () => {
                       )}
                     </div>
                     
-                    <div className="mt-10">
+                    <div className="mt-6 pt-4 border-t border-gray-100">
                       <button 
                         onClick={() => handleConfirmOrder(bill.id)}
                         disabled={!bill.paymentScreenshot}
                         className={`
-                          w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl flex items-center justify-center gap-3
+                          w-full py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2
                           ${bill.paymentScreenshot 
-                            ? 'bg-primary text-white hover:bg-opacity-90 active:scale-95 shadow-primary/30' 
-                            : 'bg-gray-100 text-gray-300 cursor-not-allowed shadow-none'}
+                            ? 'bg-dark text-white hover:bg-primary active:translate-y-0.5' 
+                            : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'}
                         `}
                       >
                         Confirm Payment
                       </button>
-                      <p className="text-[10px] text-gray-400 font-bold text-center mt-4 uppercase tracking-[0.2em]">Please review details before confirming</p>
+                      <p className="text-[10px] text-gray-400 font-medium text-center mt-2">Please double-check all details before confirming</p>
                     </div>
                   </div>
                 </div>

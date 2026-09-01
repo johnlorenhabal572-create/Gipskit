@@ -1,25 +1,21 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
-import { CreditCard, CheckCircle2, XCircle, Eye, User, Phone, MapPin, Facebook, RefreshCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { CreditCard, CheckCircle2, Eye, User, Phone, MapPin, Facebook, X, AlertCircle } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 
 const CustomerPayment = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   const loadOrders = async () => {
     try {
       const allOrders = await fetchOrders();
-      // Filter orders that are 'On Delivery' and have a payment screenshot (for GCash) or are COD
       const paymentOrders = allOrders.filter(order => 
         order.status === 'On Delivery'
       );
       setOrders(paymentOrders);
     } catch (err) {
       console.error('Failed to load customer payment orders:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -37,194 +33,180 @@ const CustomerPayment = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="bg-primary/10 p-3 rounded-2xl text-primary">
-          <CreditCard size={32} />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Customer Payments</h1>
-          <p className="text-gray-500 text-sm font-medium">Verify and confirm customer payments</p>
-        </div>
-      </div>
-
-      {orders.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-200">
-          <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CreditCard size={32} className="text-gray-300" />
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="bg-dark text-white p-2.5 rounded-lg">
+            <CreditCard size={20} />
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">No Pending Payments</h3>
-          <p className="text-gray-500 max-w-xs mx-auto">Orders with "On Delivery" status will appear here for payment verification.</p>
+          <div>
+            <h1 className="text-2xl font-black text-dark tracking-tight">Customer Payments</h1>
+            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Payment Verification & Confirmation</p>
+          </div>
         </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {orders.map(order => (
-            <div 
-              key={order.id} 
-              className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all cursor-pointer group"
-              onClick={() => setSelectedOrder(order)}
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">{order.id}</span>
-                    <h3 className="text-lg font-bold text-gray-800">{order.customer.name}</h3>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    order.paymentMethod === 'GCash' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {order.paymentMethod}
-                  </span>
-                </div>
 
-                <div className="space-y-2 mb-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Total Amount:</span>
-                    <span className="font-bold text-primary">₱{order.total}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Payment Status:</span>
-                    <span className={`font-bold ${order.paymentStatus === 'Paid' ? 'text-green-600' : 'text-yellow-600'}`}>
-                      {order.paymentStatus || 'Pending'}
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+            <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mx-auto mb-3">
+              <CreditCard size={24} className="text-gray-400" />
+            </div>
+            <h3 className="text-base font-bold text-dark mb-1">No Pending Payments</h3>
+            <p className="text-xs text-gray-500 max-w-xs mx-auto">Orders with "On Delivery" status ready for verification will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {orders.map(order => (
+              <div 
+                key={order.id} 
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-dark transition-colors cursor-pointer"
+                onClick={() => setSelectedOrder(order)}
+              >
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">{order.id}</span>
+                      <h3 className="text-sm font-bold text-dark">{order.customer.name}</h3>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-200">
+                      {order.paymentMethod}
                     </span>
                   </div>
-                </div>
 
-                <button className="w-full bg-gray-50 text-dark py-3 rounded-2xl font-bold group-hover:bg-primary group-hover:text-white transition-all flex items-center justify-center gap-2">
-                  <Eye size={18} /> View Details
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Details Modal */}
-      <AnimatePresence>
-        {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setSelectedOrder(null)}
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
-            >
-              <div className="p-6 border-b flex justify-between items-center bg-gray-50">
-                <h2 className="text-2xl font-bold text-gray-800">Payment Verification</h2>
-                <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                  <XCircle size={24} className="text-gray-400" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8">
-                <div className="grid md:grid-cols-2 gap-10">
-                  {/* Customer Info */}
-                  <div className="space-y-8">
-                    <div>
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Customer Details</h3>
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl">
-                          <div className="bg-white p-2 rounded-xl shadow-sm text-primary"><User size={20} /></div>
-                          <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Full Name</p>
-                            <p className="font-bold text-gray-800">{selectedOrder.customer.name}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl">
-                          <div className="bg-white p-2 rounded-xl shadow-sm text-primary"><Phone size={20} /></div>
-                          <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Phone Number</p>
-                            <p className="font-bold text-gray-800">{selectedOrder.customer.phone}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl">
-                          <div className="bg-white p-2 rounded-xl shadow-sm text-primary"><Facebook size={20} /></div>
-                          <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Facebook</p>
-                            <p className="font-bold text-gray-800">{selectedOrder.customer.facebook}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl">
-                          <div className="bg-white p-2 rounded-xl shadow-sm text-primary"><MapPin size={20} /></div>
-                          <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Address & Landmark</p>
-                            <p className="font-bold text-gray-800">{selectedOrder.customer.address}</p>
-                            <p className="text-xs text-gray-500 italic">Landmark: {selectedOrder.customer.landmark}</p>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="space-y-1.5 mb-4 py-3 border-y border-gray-100">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 font-medium">Total Amount:</span>
+                      <span className="font-bold text-dark">₱{order.total}</span>
                     </div>
-
-                    <div className="bg-dark p-6 rounded-3xl text-white">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-60">Order Total</span>
-                        <span className="text-2xl font-bold text-primary">₱{selectedOrder.total}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-60">Payment Method</span>
-                        <span className="font-bold">{selectedOrder.paymentMethod}</span>
-                      </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 font-medium">Payment Status:</span>
+                      <span className={`font-bold ${order.paymentStatus === 'Paid' ? 'text-green-700' : 'text-amber-700'}`}>
+                        {order.paymentStatus || 'Pending'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Payment Proof */}
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Payment Proof</h3>
-                    {selectedOrder.paymentMethod === 'GCash' ? (
-                      selectedOrder.paymentScreenshot ? (
-                        <div className="space-y-4">
-                          <div className="rounded-3xl overflow-hidden border-4 border-gray-100 shadow-lg aspect-[9/16] max-h-[500px] mx-auto bg-gray-50">
-                            <img src={selectedOrder.paymentScreenshot} alt="Payment Proof" className="w-full h-full object-contain" />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-gray-50 rounded-3xl p-12 text-center border-2 border-dashed border-gray-200">
-                          <AlertCircle size={48} className="text-gray-300 mx-auto mb-4" />
-                          <p className="text-gray-500 font-bold">No screenshot uploaded yet.</p>
-                        </div>
-                      )
-                    ) : (
-                      <div className="bg-yellow-50 rounded-3xl p-12 text-center border border-yellow-100">
-                        <CreditCard size={48} className="text-yellow-400 mx-auto mb-4" />
-                        <h4 className="text-xl font-bold text-yellow-900 mb-2">Cash on Pickup</h4>
-                        <p className="text-yellow-700 text-sm">Collect ₱{selectedOrder.total} from the customer upon store pickup.</p>
-                      </div>
-                    )}
-                  </div>
+                  <button className="w-full bg-gray-50 border border-gray-200 text-dark py-2 rounded-lg text-xs font-bold hover:bg-dark hover:text-white transition-colors flex items-center justify-center gap-1.5 uppercase tracking-wider">
+                    <Eye size={14} /> View Details
+                  </button>
                 </div>
               </div>
-
-              <div className="p-8 border-t bg-gray-50 flex gap-4">
-                <button 
-                  onClick={() => setSelectedOrder(null)}
-                  className="flex-1 bg-white text-gray-500 py-4 rounded-2xl font-bold border border-gray-200 hover:bg-gray-100 transition-all"
-                >
-                  Close
-                </button>
-                <button 
-                  onClick={() => handleConfirmPayment(selectedOrder.id)}
-                  className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                >
-                  <CheckCircle2 size={20} /> Confirm Payment & Complete Order
-                </button>
-              </div>
-            </motion.div>
+            ))}
           </div>
         )}
-      </AnimatePresence>
+
+        {/* Details Modal */}
+        <AnimatePresence>
+          {selectedOrder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div 
+                className="absolute inset-0 bg-black/50"
+                onClick={() => setSelectedOrder(null)}
+              />
+              <div 
+                className="relative bg-white w-full max-w-3xl max-h-[90vh] rounded-xl border border-gray-200 overflow-hidden flex flex-col z-10"
+              >
+                <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                  <h2 className="text-sm font-black text-dark uppercase tracking-wider">Payment Verification</h2>
+                  <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-dark">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Customer Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Customer Details</h3>
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <User size={16} className="text-gray-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase">Full Name</p>
+                            <p className="font-bold text-dark text-xs">{selectedOrder.customer.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <Phone size={16} className="text-gray-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase">Phone Number</p>
+                            <p className="font-bold text-dark text-xs">{selectedOrder.customer.phone}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <Facebook size={16} className="text-gray-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase">Facebook</p>
+                            <p className="font-bold text-dark text-xs">{selectedOrder.customer.facebook}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <MapPin size={16} className="text-gray-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase">Address & Landmark</p>
+                            <p className="font-bold text-dark text-xs">{selectedOrder.customer.address}</p>
+                            <p className="text-[11px] text-gray-500">Landmark: {selectedOrder.customer.landmark}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-dark p-4 rounded-lg text-white">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Order Total</span>
+                          <span className="text-xl font-black text-white">₱{selectedOrder.total}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Payment Method</span>
+                          <span className="font-bold">{selectedOrder.paymentMethod}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Proof */}
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Payment Proof</h3>
+                      {selectedOrder.paymentMethod === 'GCash' ? (
+                        selectedOrder.paymentScreenshot ? (
+                          <div className="rounded-lg overflow-hidden border border-gray-200 aspect-[9/16] max-h-[380px] mx-auto bg-gray-50">
+                            <img src={selectedOrder.paymentScreenshot} alt="Payment Proof" className="w-full h-full object-contain" />
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 rounded-lg p-8 text-center border border-gray-200">
+                            <AlertCircle size={32} className="text-gray-400 mx-auto mb-2" />
+                            <p className="text-gray-600 font-bold text-xs">No screenshot uploaded yet.</p>
+                          </div>
+                        )
+                      ) : (
+                        <div className="bg-amber-50 rounded-lg p-6 text-center border border-amber-200">
+                          <CreditCard size={32} className="text-amber-700 mx-auto mb-2" />
+                          <h4 className="text-sm font-bold text-amber-900 mb-1">Cash on Pickup</h4>
+                          <p className="text-amber-800 text-xs">Collect ₱{selectedOrder.total} from the customer upon store pickup.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-2">
+                  <button 
+                    onClick={() => setSelectedOrder(null)}
+                    className="flex-1 bg-white text-gray-700 py-2 rounded-lg font-bold border border-gray-300 hover:bg-gray-100 transition-colors text-xs uppercase tracking-wider"
+                  >
+                    Close
+                  </button>
+                  <button 
+                    onClick={() => handleConfirmPayment(selectedOrder.id)}
+                    className="flex-1 bg-dark text-white py-2 rounded-lg font-bold hover:bg-primary transition-colors flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider active:translate-y-0.5"
+                  >
+                    <CheckCircle2 size={16} /> Confirm Payment & Complete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
-
-const AlertCircle = ({ size, className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-);
 
 export default CustomerPayment;

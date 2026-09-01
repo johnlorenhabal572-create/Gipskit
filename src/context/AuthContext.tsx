@@ -11,7 +11,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [accounts, setAccounts] = useState<any[]>(() => {
     const savedAccounts = localStorage.getItem('capstone_accounts');
     const defaults = [
-      { id: 'admin-1', name: 'Store Admin', role: 'admin', email: 'admin@store.com', password: 'Admin123' },
+      { 
+        id: 'admin-1', 
+        name: 'Store Admin', 
+        role: 'admin', 
+        status: 'Active',
+        email: 'admin@store.com', 
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        orderCount: 0,
+        loginHistory: [{ timestamp: new Date().toISOString(), ip: '127.0.0.1', userAgent: 'System Default', action: 'System Provisioned' }]
+      },
     ];
 
     if (savedAccounts) {
@@ -19,7 +29,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const parsed = JSON.parse(savedAccounts);
         const merged = [...parsed];
         defaults.forEach(def => {
-          if (!merged.find(acc => acc.email.toLowerCase() === def.email.toLowerCase() || acc.id === def.id)) {
+          if (!merged.find(acc => acc.email?.toLowerCase() === def.email.toLowerCase() || acc.id === def.id)) {
             merged.push(def);
           }
         });
@@ -31,6 +41,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     return defaults;
   });
+
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Fetch users from server API with fallbacks
+  const fetchUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await fetch('/api/auth/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setAccounts(data);
+          localStorage.setItem('capstone_accounts', JSON.stringify(data));
+          setLoadingUsers(false);
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch users from server, using local store:', err);
+    }
+    setLoadingUsers(false);
+    return accounts;
+  }, [accounts]);
+
+  // Initial fetch on mount if admin
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -46,11 +84,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Request 6-digit verification code to Gmail
   const sendSignUpCode = useCallback(async (email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Client-side quick check against existing registered accounts
+    const existingLocal = accounts.find(
+      (a: any) => a.email && a.email.toLowerCase() === cleanEmail
+    );
+    if (existingLocal) {
+      throw new Error('An account with this Gmail address already exists. Please Sign In instead.');
+    }
+
     try {
       const res = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), purpose: 'signup' }),
+        body: JSON.stringify({ email: cleanEmail, purpose: 'signup' }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -60,7 +108,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (err: any) {
       throw new Error(err.message || 'Network error sending verification code');
     }
-  }, []);
+  }, [accounts]);
 
   // Verify 6-digit code for Gmail
   const verifySignUpCode = useCallback(async (email: string, code: string) => {
@@ -85,12 +133,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Complete sign up by setting password (8 chars, 1 big letter, 1 number)
   const completeSignUp = useCallback(async (email: string, password: string, name?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if account already exists locally
+    const existingLocal = accounts.find(
+      (a: any) => a.email && a.email.toLowerCase() === cleanEmail
+    );
+    if (existingLocal) {
+      throw new Error('An account with this Gmail address already exists. Please Sign In.');
+    }
+
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
+          email: cleanEmail,
           password: password.trim(),
           name: name?.trim()
         }),
@@ -115,7 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (err: any) {
       throw new Error(err.message || 'Registration error');
     }
-  }, []);
+  }, [accounts]);
 
   // Unified Sign In (Customers & Admins)
   const login = useCallback(async (email: string, password: string) => {
@@ -170,23 +228,70 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   }, []);
 
-  const addAccount = useCallback((newAcc: any) => {
+  const addAccount = useCallback(async (newAcc: any) => {
+    try {
+      const res = await fetch('/api/auth/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAcc)
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setAccounts(prev => [created, ...prev.filter(a => a.email !== created.email && a.id !== created.id)]);
+        return created;
+      }
+    } catch (err) {
+      console.warn('API error creating account, saving locally:', err);
+    }
+
     const accWithId = { 
       ...newAcc, 
-      id: Date.now().toString(),
-      email: newAcc.email.toLowerCase()
+      id: `usr_${Date.now()}`,
+      email: newAcc.email.toLowerCase(),
+      status: newAcc.status || 'Active',
+      createdAt: new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+      orderCount: 0,
+      loginHistory: [{ timestamp: new Date().toISOString(), ip: '127.0.0.1', userAgent: 'Admin Provisioned', action: 'Created' }]
     };
-    setAccounts(prev => [...prev, accWithId]);
+    setAccounts(prev => [accWithId, ...prev.filter(a => a.email !== accWithId.email)]);
     return accWithId;
   }, []);
 
-  const updateAccount = useCallback((id: string, updatedData: any) => {
-    setAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, ...updatedData } : acc));
+  const updateAccount = useCallback(async (id: string, updatedData: any) => {
+    try {
+      const res = await fetch(`/api/auth/users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...data.user } : acc));
+          return data.user;
+        }
+      }
+    } catch (err) {
+      console.warn('API error updating user, updating locally:', err);
+    }
+    setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...updatedData } : acc));
   }, []);
 
-  const deleteAccount = useCallback((id: string) => {
-    setAccounts(prev => prev.filter(acc => acc.id !== id));
-  }, []);
+  // Update Status: Active, Suspended, or Disabled (Preserves records & order history)
+  const updateUserStatus = useCallback(async (id: string, status: 'Active' | 'Suspended' | 'Disabled') => {
+    return updateAccount(id, { status });
+  }, [updateAccount]);
+
+  // Update Role: customer, staff, or admin
+  const updateUserRole = useCallback(async (id: string, role: 'customer' | 'staff' | 'admin') => {
+    return updateAccount(id, { role });
+  }, [updateAccount]);
+
+  // Disable account instead of permanent deletion to preserve all historical orders & receipts
+  const disableAccount = useCallback((id: string) => {
+    updateUserStatus(id, 'Disabled');
+  }, [updateUserStatus]);
 
   const value = useMemo(() => ({
     user, 
@@ -195,11 +300,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     verifySignUpCode,
     completeSignUp,
     logout, 
-    accounts, 
+    accounts,
+    loadingUsers,
+    fetchUsers,
     addAccount, 
     updateAccount, 
-    deleteAccount
-  }), [user, login, sendSignUpCode, verifySignUpCode, completeSignUp, logout, accounts, addAccount, updateAccount, deleteAccount]);
+    updateUserStatus,
+    updateUserRole,
+    disableAccount
+  }), [
+    user, 
+    login, 
+    sendSignUpCode, 
+    verifySignUpCode, 
+    completeSignUp, 
+    logout, 
+    accounts, 
+    loadingUsers,
+    fetchUsers,
+    addAccount, 
+    updateAccount, 
+    updateUserStatus,
+    updateUserRole,
+    disableAccount
+  ]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,6 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Utensils, Phone, ArrowRight, Facebook, Clock, MapPin } from 'lucide-react';
+import { Utensils, ArrowRight } from 'lucide-react';
 import { useContext, useEffect } from 'react';
 import { IMAGES } from '../constants/images';
 import { AuthContext } from '../context/AuthContext';
@@ -16,47 +15,39 @@ const LandingPage = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center">
       {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden bg-white py-16">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src={IMAGES.HERO_BG} 
-            alt="Hero Background" 
-            className="w-full h-full object-cover opacity-10"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-white"></div>
-        </div>
-        
-        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
-            <h1 className="text-6xl md:text-8xl font-bold mb-8 tracking-tighter text-dark leading-[0.9]">
-              Your Favorite <br />
-              <span className="text-primary italic font-serif">Chill Spot</span> in Bulan.
-            </h1>
-            <p className="text-xl md:text-2xl mb-12 max-w-3xl mx-auto text-gray-500 font-medium leading-relaxed">
-              Home of the best Sizzling Sisig and the coldest drinks. Whether it’s lunch with the family or a night out with friends, we’ve got your table ready.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-6 justify-center">
-              <Link 
-                to="/menu" 
-                className="bg-primary hover:bg-opacity-90 text-white px-10 py-5 rounded-full font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-primary/30 transform hover:-translate-y-1"
-              >
-                Browse Menu <Utensils size={20} />
-              </Link>
-              <Link 
-                to="/about" 
-                className="bg-transparent border-2 border-dark text-dark hover:bg-dark hover:text-white px-10 py-5 rounded-full font-bold text-lg flex items-center justify-center gap-2 transition-all transform hover:-translate-y-1"
-              >
-                Learn More <ArrowRight size={20} />
-              </Link>
-            </div>
-          </motion.div>
+      <section className="relative py-16 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs font-bold text-gray-600 mb-6 uppercase tracking-wider">
+            <span>Official Gip's Kitchen Platform</span>
+          </div>
+
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black mb-6 tracking-tight text-dark leading-[1.05]">
+            Your Favorite <br />
+            <span className="text-primary">Chill Spot</span> in Bulan.
+          </h1>
+
+          <p className="text-base sm:text-lg md:text-xl mb-10 max-w-2xl mx-auto text-gray-600 font-normal leading-relaxed">
+            Home of the best Sizzling Sisig and the coldest drinks. Order ahead online and pick up fresh and hot at your convenience.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+            <Link 
+              to="/menu" 
+              className="flex-1 bg-primary text-white hover:bg-primary/90 px-6 py-3.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-transparent active:translate-y-0.5"
+            >
+              <Utensils size={18} />
+              <span>Browse Menu</span>
+            </Link>
+            <Link 
+              to="/about" 
+              className="flex-1 bg-white border border-gray-300 text-dark hover:bg-gray-50 px-6 py-3.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors active:translate-y-0.5"
+            >
+              <span>About Pickup</span>
+              <ArrowRight size={18} />
+            </Link>
+          </div>
         </div>
       </section>
     </div>

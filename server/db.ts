@@ -1,5 +1,20 @@
 import mongoose from 'mongoose';
-import { User } from './models/User';
+import { User, Category } from './models';
+
+export const DEFAULT_CATEGORIES = [
+  "Soups",
+  "Sandwiches",
+  "Value Meals",
+  "Breakfast",
+  "Vegetables",
+  "Pork",
+  "Chicken",
+  "Seafood",
+  "Appetizers",
+  "Rice",
+  "Salads",
+  "Beverages"
+];
 
 let isConnected = false;
 let lastConnectionAttempt = 0;
@@ -15,12 +30,22 @@ export const memoryStore = {
       email: (process.env.ADMIN_EMAIL || 'admin@store.com').toLowerCase(),
       password: process.env.ADMIN_PASSWORD || 'Admin123',
       role: 'admin',
+      status: 'Active',
       createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
+      lastLogin: new Date().toISOString(),
+      loginHistory: [
+        {
+          timestamp: new Date().toISOString(),
+          ip: '127.0.0.1',
+          userAgent: 'System Seed',
+          action: 'Initial Account Setup'
+        }
+      ]
     }
   ],
   codes: new Map<string, { code: string; verified: boolean; expiresAt: number; createdAt: number }>(),
   products: [] as any[],
+  categories: [...DEFAULT_CATEGORIES],
   inventory: [] as any[],
   inventoryLogs: [] as any[],
   orders: [] as any[]
@@ -78,6 +103,15 @@ export async function connectMongoose(): Promise<{ isConnected: boolean; error?:
         lastLogin: new Date()
       });
       console.log(`[Mongoose / MongoDB Atlas] Default admin account seeded: ${adminEmail}`);
+    }
+
+    // Seed default categories if none exist
+    const categoryCount = await Category.countDocuments();
+    if (categoryCount === 0) {
+      for (const catName of DEFAULT_CATEGORIES) {
+        await Category.create({ name: catName }).catch(() => {});
+      }
+      console.log(`[Mongoose / MongoDB Atlas] Default categories seeded.`);
     }
 
     return { isConnected: true };

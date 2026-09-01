@@ -38,10 +38,10 @@ const Navbar = () => {
       ];
     }
 
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'staff') {
       return [
         {
-          title: 'Admin Panel',
+          title: 'Staff & Admin Panel',
           links: [
             { name: 'Dashboard', path: '/dashboard', icon: <TrendingUp size={20} /> },
             { name: 'Manage Orders', path: '/admin', icon: <ClipboardList size={20} /> },
@@ -95,23 +95,27 @@ const Navbar = () => {
   return (
     <>
       {/* Top Header (Universal) */}
-      <header className="bg-white text-dark p-4 shadow-sm sticky top-0 z-40 w-full">
+      <header className="bg-white text-dark py-3 px-4 sm:px-6 border-b border-gray-200 sticky top-0 z-40 w-full">
         <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(true)} className="text-dark hover:text-primary transition-colors">
-              <MenuIcon size={24} />
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-2 text-dark hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Toggle navigation menu"
+            >
+              <MenuIcon size={22} />
             </button>
-            <Link to="/" className="hidden sm:flex items-center gap-2 text-xl font-bold tracking-tighter">
-              <div className="bg-dark p-1 rounded-full overflow-hidden w-8 h-8 flex items-center justify-center">
+            <Link to="/" className="hidden sm:flex items-center gap-2.5 text-lg font-black tracking-tight">
+              <div className="bg-dark p-1 rounded-md overflow-hidden w-7 h-7 flex items-center justify-center">
                 <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain" />
               </div>
-              <span>GIP'S <span className="text-primary text-sm sm:text-xl">KITCHEN</span></span>
+              <span className="tracking-tight">GIP'S <span className="text-primary font-black">KITCHEN</span></span>
             </Link>
             
-            {/* Page Title for Mobile/Universal */}
+            {/* Page Title */}
             {pageTitle && (
-              <div className="flex items-center gap-2 ml-1 sm:ml-4 border-l border-gray-100 pl-3 sm:pl-4">
-                <span className="text-[12px] sm:text-sm font-black text-primary uppercase tracking-widest whitespace-nowrap">
+              <div className="flex items-center gap-2 ml-1 sm:ml-4 border-l border-gray-200 pl-3 sm:pl-4">
+                <span className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                   {pageTitle}
                 </span>
               </div>
@@ -123,12 +127,12 @@ const Navbar = () => {
               <button 
                 id="header-cart-btn"
                 onClick={() => setIsCartOpen(true)} 
-                className="relative p-2 text-dark hover:bg-gray-100 rounded-full transition-colors group"
+                className="relative p-2 text-dark hover:bg-gray-100 rounded-lg border border-transparent hover:border-gray-200 transition-colors"
                 title="Your Cart"
               >
-                <ShoppingCart size={22} />
+                <ShoppingCart size={20} />
                 {itemCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center border border-white">
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center border border-white">
                     {itemCount}
                   </span>
                 )}
@@ -139,29 +143,21 @@ const Navbar = () => {
               <Link 
                 id="header-signin-btn"
                 to="/login" 
-                className="bg-primary text-white hover:bg-opacity-90 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all shadow-sm shadow-primary/20 flex items-center gap-1.5 active:scale-95"
+                className="bg-primary text-white hover:bg-primary/90 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center gap-1.5 active:translate-y-0.5"
               >
                 <User size={15} />
                 <span>Sign In</span>
               </Link>
             ) : (
-              <div className="flex items-center gap-2 pl-1 border-l border-gray-100">
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 py-1 px-3 rounded-full">
-                  <div className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-black">
+              <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
+                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 py-1.5 px-3 rounded-lg">
+                  <div className="w-5 h-5 bg-primary text-white rounded text-[11px] font-bold flex items-center justify-center">
                     {user.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
-                  <span className="text-xs font-bold text-dark hidden md:inline truncate max-w-[110px]">
+                  <span className="text-xs font-bold text-dark truncate max-w-[120px]">
                     {user.name}
                   </span>
                 </div>
-                <button 
-                  id="header-logout-btn"
-                  onClick={handleLogout} 
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" 
-                  title="Logout"
-                >
-                  <LogOut size={18} />
-                </button>
               </div>
             )}
           </div>
@@ -172,73 +168,68 @@ const Navbar = () => {
       <AnimatePresence>
         {notification && (
           <motion.div
-            initial={{ opacity: 0, y: -20, x: '-50%' }}
-            animate={{ opacity: 1, y: 20, x: '-50%' }}
-            exit={{ opacity: 0, y: -20, x: '-50%' }}
-            className="fixed top-16 left-1/2 z-50 bg-white border border-gray-100 shadow-xl px-6 py-3 rounded-full flex items-center gap-3"
+            initial={{ opacity: 0, y: -10, x: '-50%' }}
+            animate={{ opacity: 1, y: 15, x: '-50%' }}
+            exit={{ opacity: 0, y: -10, x: '-50%' }}
+            className="fixed top-14 left-1/2 z-50 bg-white border border-gray-200 px-5 py-2.5 rounded-lg flex items-center gap-2.5"
           >
-            <div className="bg-green-100 p-1 rounded-full">
-              <CheckCircle2 size={16} className="text-green-600" />
-            </div>
-            <span className="text-sm font-bold text-gray-800">{notification}</span>
+            <CheckCircle2 size={16} className="text-primary shrink-0" />
+            <span className="text-xs font-bold text-dark">{notification}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Sidebar Overlay */}
       {isSidebarOpen && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 z-50"
+        <div 
+          className="fixed inset-0 bg-black/40 z-50"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 h-full bg-white text-dark w-80 shadow-2xl z-50 transition-transform duration-300 transform
+        fixed top-0 left-0 h-full bg-white text-dark w-72 border-r border-gray-200 z-50 transition-transform duration-200 ease-in-out
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="flex flex-col h-full p-8">
+        <div className="flex flex-col h-full p-6">
           {/* Logo & Close */}
-          <div className="flex justify-between items-center mb-12">
-            <Link to="/" className="flex items-center gap-2 text-2xl font-bold tracking-tighter" onClick={() => setIsSidebarOpen(false)}>
-              <div className="bg-dark p-1.5 rounded-full overflow-hidden w-10 h-10 flex items-center justify-center">
+          <div className="flex justify-between items-center pb-5 border-b border-gray-200">
+            <Link to="/" className="flex items-center gap-2 text-xl font-black tracking-tight" onClick={() => setIsSidebarOpen(false)}>
+              <div className="bg-dark p-1 rounded-md overflow-hidden w-8 h-8 flex items-center justify-center">
                 <img src={IMAGES.LOGO} alt="Logo" className="w-full h-full object-contain" />
               </div>
               <span>GIP'S <span className="text-primary">KITCHEN</span></span>
             </Link>
-            <button className="bg-gray-100 p-2 rounded-full text-gray-400 hover:text-primary transition-colors" onClick={() => setIsSidebarOpen(false)}>
-              <X size={20} />
+            <button 
+              className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-dark transition-colors" 
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close navigation sidebar"
+            >
+              <X size={18} />
             </button>
           </div>
 
           {/* Navigation Sections */}
-          <nav className="flex-1 space-y-10 overflow-y-auto pr-2 custom-scrollbar">
+          <nav className="flex-1 py-6 space-y-6 overflow-y-auto pr-1">
             {navSections.map((section) => (
-              <div key={section.title} className="space-y-4">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-3">{section.title}</p>
-                <div className="space-y-1">
+              <div key={section.title} className="space-y-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">{section.title}</p>
+                <div className="space-y-0.5">
                   {section.links.map((link) => {
                     const isActive = currentPath === link.path;
                     return (
                       <Link 
                         key={link.name} 
                         to={link.path} 
-                        className={`flex items-center gap-3 p-3 rounded-2xl font-bold transition-all group ${
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
                           isActive 
-                            ? 'bg-primary/10 text-primary' 
-                            : 'text-gray-700 hover:bg-primary/5 hover:text-primary'
+                            ? 'bg-primary/10 text-primary border border-primary/20' 
+                            : 'text-gray-700 hover:bg-gray-100 hover:text-dark border border-transparent'
                         }`}
                         onClick={() => setIsSidebarOpen(false)}
                       >
-                        <span className={`p-2 rounded-xl transition-colors ${
-                          isActive 
-                            ? 'bg-primary/20 text-primary' 
-                            : 'bg-gray-100 group-hover:bg-primary/10 text-gray-400 group-hover:text-primary'
-                        }`}>
+                        <span className={isActive ? 'text-primary' : 'text-gray-500'}>
                           {link.icon}
                         </span>
                         {link.name}
@@ -251,29 +242,33 @@ const Navbar = () => {
           </nav>
 
           {/* User Section */}
-          <div className="mt-auto pt-6 border-t border-gray-100">
+          <div className="pt-4 border-t border-gray-200 mt-auto">
             {user ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold">
+              <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 bg-primary text-white rounded font-bold text-xs flex items-center justify-center shrink-0">
                     {user.name.charAt(0)}
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold truncate w-24">{user.name}</span>
-                    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{user.role}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold truncate text-dark">{user.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{user.role}</p>
                   </div>
                 </div>
-                <button onClick={handleLogout} className="text-gray-400 hover:text-primary transition-colors p-2" title="Logout">
-                  <LogOut size={20} />
+                <button 
+                  onClick={handleLogout} 
+                  className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" 
+                  title="Logout"
+                >
+                  <LogOut size={16} />
                 </button>
               </div>
             ) : (
               <Link 
                 to="/login" 
-                className="w-full bg-gray-100 text-dark py-4 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-dark text-white py-3 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-dark/90 transition-colors flex items-center justify-center gap-2"
                 onClick={() => setIsSidebarOpen(false)}
               >
-                <User size={18} className="text-gray-400" /> Login/Register
+                <User size={16} /> Sign In / Sign Up
               </Link>
             )}
           </div>

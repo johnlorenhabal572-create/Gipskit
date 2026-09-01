@@ -45,36 +45,36 @@ const AdminDashboard = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch(status) {
-      case 'Pending': return 'bg-yellow-50 text-yellow-700 border-yellow-100';
-      case 'Paid': return 'bg-blue-50 text-blue-700 border-blue-100';
-      case 'Processing': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-      case 'Ready to Pickup': return 'bg-purple-50 text-purple-700 border-purple-100';
-      case 'Completed': return 'bg-green-50 text-green-700 border-green-100';
-      case 'Cancelled': return 'bg-red-50 text-red-700 border-red-100';
-      default: return 'bg-gray-50 text-gray-700 border-gray-100';
+      case 'Pending': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+      case 'Paid': return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'Processing': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      case 'Ready to Pickup': return 'bg-purple-50 text-purple-800 border-purple-200';
+      case 'Completed': return 'bg-green-50 text-green-800 border-green-200';
+      case 'Cancelled': return 'bg-red-50 text-red-800 border-red-200';
+      default: return 'bg-gray-50 text-gray-800 border-gray-200';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-          <div className="hidden">
-            <h1 className="text-4xl font-black text-dark tracking-tighter">MANAGE ORDERS</h1>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] mt-1">Gip's Kitchen Control Panel</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Order Queue</h1>
+            <p className="text-xs text-gray-500 mt-1">Manage, verify payments, and process customer pickup orders</p>
           </div>
           
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            {['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'All'].map(status => (
+          <div className="flex flex-wrap gap-1.5 w-full sm:w-auto">
+            {['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
                   filterStatus === status 
-                    ? 'bg-dark text-white border-dark shadow-xl active:scale-95' 
-                    : 'bg-white text-gray-400 border-gray-100 hover:border-dark hover:text-dark'
+                    ? 'bg-dark text-white border-dark' 
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-dark hover:text-dark'
                 }`}
               >
                 {status}
@@ -84,101 +84,131 @@ const AdminDashboard = () => {
         </div>
         
         {/* Search Bar */}
-        <div className="bg-white p-2 rounded-[2rem] shadow-sm border border-gray-100 mb-8 flex items-center">
+        <div className="bg-white p-2 rounded-xl border border-gray-200 mb-6 flex items-center">
             <input 
               type="text" 
-              placeholder="Track by ID, customer, or phone number..." 
+              placeholder="Search by Order ID, customer name, email, or phone number..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-6 py-4 rounded-xl border-none focus:ring-0 text-dark font-bold placeholder:text-gray-200"
+              className="w-full px-4 py-2 rounded-lg border-none focus:outline-none text-dark font-medium text-sm placeholder:text-gray-400"
             />
         </div>
 
-        <div className="grid gap-8">
+        <div className="grid gap-4">
           {filteredOrders.length === 0 ? (
-            <div className="bg-white p-20 rounded-[3rem] shadow-sm border border-gray-100 text-center">
-              <p className="text-gray-300 text-lg font-bold uppercase tracking-widest">Zero Orders Found</p>
+            <div className="bg-white p-12 rounded-xl border border-gray-200 text-center">
+              <p className="text-gray-400 text-sm font-bold uppercase tracking-wider">No Orders Found</p>
             </div>
           ) : (
-            filteredOrders.map((order) => (
-              <div key={order.id} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-50 flex flex-col xl:flex-row xl:items-stretch gap-8 hover:border-primary/20 transition-all group">
-                <div className="flex gap-8 items-start flex-1">
-                  <div className={`w-20 h-20 rounded-3xl flex items-center justify-center shrink-0 border-2 font-black text-2xl shadow-inner ${getStatusColor(order.status)}`}>
-                    {order.status.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h3 className="text-2xl font-black text-dark tracking-tight">{order.customer.name}</h3>
-                      <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
+            filteredOrders.map((order) => {
+              const orderDate = order.date || order.createdAt;
+              const formattedDate = orderDate ? new Date(orderDate).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              }) : 'N/A';
+
+              return (
+                <div key={order.id} className="bg-white p-5 sm:p-6 rounded-xl border border-gray-200 flex flex-col xl:flex-row xl:items-stretch gap-6 hover:border-gray-300 transition-colors">
+                  <div className="flex gap-4 items-start flex-1">
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 border font-black text-lg ${getStatusColor(order.status)}`}>
+                      {order.status.charAt(0)}
                     </div>
-                    <p className="text-[10px] font-mono text-gray-400 mb-6 uppercase font-bold">TXN_REF: {order.id}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="text-lg font-black text-dark tracking-tight">{order.customer?.name || 'Customer'}</h3>
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mb-3 font-medium">
+                        <span className="font-mono font-bold text-gray-600">ID: {order.id}</span>
+                        <span>•</span>
+                        <span>Date: <strong className="text-dark">{formattedDate}</strong></span>
+                        {order.orderType && (
+                          <>
+                            <span>•</span>
+                            <span className="uppercase text-[10px] font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200 text-dark">{order.orderType}</span>
+                          </>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 max-w-lg">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Customer Phone</p>
+                          <p className="text-xs font-bold text-dark">{order.customer?.phone || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Customer Email</p>
+                          <p className="text-xs font-bold text-dark truncate">{order.customer?.email || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Ordered Products ({order.items?.length || 0})</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {order.items?.map((item: any, idx: number) => (
+                            <div key={`${item.id || item.name}-${idx}`} className="bg-gray-50 px-2.5 py-1 rounded-md text-xs font-bold border border-gray-200 flex items-center gap-1.5 text-dark">
+                              <span className="text-primary font-black">{item.quantity}×</span>
+                              <span>{item.name}</span>
+                              {item.price && (
+                                <span className="text-gray-400 text-[11px] font-normal">(₱{item.price * item.quantity})</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Receipt and Actions */}
+                  <div className="flex flex-col sm:flex-row xl:flex-col justify-between gap-4 sm:items-center xl:items-end p-4 bg-gray-50 rounded-lg shrink-0 border border-gray-200">
+                    <div className="flex gap-4 items-center">
+                      {order.paymentScreenshot ? (
+                        <button 
+                          onClick={() => setPreviewImage(order.paymentScreenshot)}
+                          className="group/receipt relative block"
+                          title="Click to view full payment receipt screenshot"
+                        >
+                          <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-300 bg-white">
+                            <img 
+                              src={order.paymentScreenshot} 
+                              alt="Receipt" 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="absolute inset-0 bg-dark/60 opacity-0 group-hover/receipt:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center">
+                            <Eye className="text-white mb-0.5" size={14} />
+                            <span className="text-[9px] text-white font-bold uppercase tracking-wider">View</span>
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg bg-gray-100 border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 gap-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-center">No Receipt</span>
+                        </div>
+                      )}
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Amount</p>
+                        <p className="text-2xl font-black text-primary tracking-tight">₱{order.total}</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase">{order.paymentMethod || 'GCash'}</p>
+                      </div>
+                    </div>
                     
-                    <div className="grid md:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-gray-50/50 p-5 rounded-[2rem] border border-gray-100">
-                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3">Customer Credentials</p>
-                        <div className="space-y-1">
-                          <p className="text-sm font-bold text-dark">{order.customer.phone}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {order.items.map((item, idx) => (
-                        <div key={`${item.id || item.name}-${idx}`} className="bg-white px-4 py-2 rounded-2xl text-xs font-black border border-gray-100 shadow-sm flex items-center gap-2">
-                          <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-lg">{item.quantity}x</span>
-                          <span className="text-dark">{item.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Receipt and Actions */}
-                <div className="flex flex-col sm:flex-row xl:flex-col justify-between gap-6 sm:items-center xl:items-end p-6 bg-gray-50 rounded-[2.5rem] shrink-0 border border-gray-100">
-                  <div className="flex gap-4 items-center">
-                    {order.paymentScreenshot ? (
-                      <button 
-                        onClick={() => setPreviewImage(order.paymentScreenshot)}
-                        className="group/receipt relative block"
-                      >
-                        <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-lg border-2 border-white ring-4 ring-green-100/50">
-                          <img 
-                            src={order.paymentScreenshot} 
-                            alt="Receipt" 
-                            className="w-full h-full object-cover transition-transform group-hover/receipt:scale-110" 
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                        <div className="absolute inset-0 bg-dark/40 opacity-0 group-hover/receipt:opacity-100 transition-opacity rounded-2xl flex flex-col items-center justify-center">
-                          <Eye className="text-white mb-1" size={16} />
-                          <span className="text-[8px] text-white font-black uppercase">Preview</span>
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="w-24 h-24 rounded-2xl bg-gray-200 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 gap-1">
-                        <span className="text-[10px] font-black uppercase">No Receipt</span>
-                      </div>
-                    )}
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Total Bill</p>
-                      <p className="text-3xl font-black text-primary tracking-tighter">₱{order.total}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">{order.paymentMethod}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col gap-2 w-full sm:w-48">
-                    <div className="flex flex-col gap-2 pt-4">
+                    <div className="flex flex-col gap-1.5 w-full sm:w-44">
                       {order.status === 'Pending' && (
-                        <div className="text-[10px] font-black text-yellow-600 bg-yellow-100 p-2 rounded-xl text-center uppercase tracking-widest">
+                        <div className="text-[10px] font-bold text-yellow-800 bg-yellow-100/80 border border-yellow-200 py-2 px-3 rounded-lg text-center uppercase tracking-wider">
                           Awaiting Payment
                         </div>
                       )}
                       {order.status === 'Paid' && (
                         <button 
                           onClick={() => handleStatusChange(order.id, 'Processing')}
-                          className="bg-dark text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary transition-all shadow-lg active:scale-95"
+                          className="bg-dark text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors text-center"
                         >
                           Process Order
                         </button>
@@ -186,7 +216,7 @@ const AdminDashboard = () => {
                       {order.status === 'Processing' && (
                         <button 
                           onClick={() => handleStatusChange(order.id, 'Ready to Pickup')}
-                          className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                          className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors text-center"
                         >
                           Ready to Pickup
                         </button>
@@ -194,7 +224,7 @@ const AdminDashboard = () => {
                       {order.status === 'Ready to Pickup' && (
                         <button 
                           onClick={() => handleStatusChange(order.id, 'Completed')}
-                          className="bg-green-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-700 transition-all shadow-lg active:scale-95"
+                          className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-green-700 transition-colors text-center"
                         >
                           Mark Collected
                         </button>
@@ -202,7 +232,7 @@ const AdminDashboard = () => {
                       {order.status === 'Paid' && (
                         <button 
                           onClick={() => handleStatusChange(order.id, 'Cancelled')}
-                          className="text-gray-400 hover:text-red-500 text-[10px] font-black uppercase tracking-widest py-2"
+                          className="text-gray-500 hover:text-red-600 text-[10px] font-bold uppercase tracking-wider py-1 text-center transition-colors"
                         >
                           Decline Transaction
                         </button>
@@ -210,8 +240,8 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -219,34 +249,28 @@ const AdminDashboard = () => {
       {/* Image Preview Modal */}
       <AnimatePresence>
         {previewImage && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-dark/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-10"
+          <div 
+            className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 md:p-8"
             onClick={() => setPreviewImage(null)}
           >
             <button 
-              className="absolute top-6 right-6 text-white/50 hover:text-white bg-white/10 p-2 rounded-full transition-colors"
+              className="absolute top-4 right-4 text-white hover:text-gray-300 bg-dark/80 p-2 rounded-lg transition-colors"
               onClick={() => setPreviewImage(null)}
             >
-              <X size={32} />
+              <X size={24} />
             </button>
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="max-w-full max-h-full sm:max-w-3xl flex items-center justify-center"
+            <div
+              className="max-w-full max-h-full sm:max-w-2xl bg-white p-2 rounded-xl border border-gray-200"
               onClick={(e) => e.stopPropagation()}
             >
               <img 
                 src={previewImage} 
                 alt="Receipt Preview" 
-                className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl border-4 border-white/10"
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
                 referrerPolicy="no-referrer"
               />
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>

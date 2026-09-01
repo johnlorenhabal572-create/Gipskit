@@ -65,43 +65,41 @@ const Checkout = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-2xl py-12">
-      <div className="flex items-center gap-3 mb-8">
-        <h1 className="text-3xl font-black text-dark tracking-tighter">CHECKOUT</h1>
+    <div className="container mx-auto p-4 sm:p-6 max-w-xl py-8 sm:py-12">
+      <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Checkout</h1>
+        <p className="text-xs text-gray-500 mt-1">Review your items and confirm your pickup order</p>
       </div>
       
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-50 mb-10 overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16"></div>
-        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-          <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+      <div className="bg-white p-6 rounded-xl border border-gray-200 mb-6">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">
           Order Summary
         </h2>
-        <div className="space-y-4">
-          {cart.map((item, index) => (
-            <div key={index} className="flex justify-between items-center text-dark">
+        <div className="space-y-3 divide-y divide-gray-100">
+          {cart.map((item: any, index: number) => (
+            <div key={index} className="flex justify-between items-center text-dark pt-2 first:pt-0">
               <div className="flex flex-col">
-                <span className="font-bold">{item.name}</span>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty: {item.quantity}</span>
+                <span className="font-bold text-sm">{item.name}</span>
+                <span className="text-xs text-gray-500 font-medium">Qty: {item.quantity} × ₱{item.price}</span>
               </div>
-              <span className="font-black text-primary">₱{item.price * item.quantity}</span>
+              <span className="font-black text-primary text-sm">₱{item.price * item.quantity}</span>
             </div>
           ))}
         </div>
-        <div className="border-t border-dashed border-gray-100 mt-6 pt-6 flex justify-between items-end">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Grand Total</span>
-          <span className="text-3xl font-black text-dark tracking-tighter">₱{getCartTotal()}</span>
+        <div className="border-t border-gray-200 mt-5 pt-4 flex justify-between items-center">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Total Amount</span>
+          <span className="text-2xl font-black text-dark tracking-tight">₱{getCartTotal()}</span>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[3rem] shadow-2xl border border-gray-50 space-y-8">
-        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-          <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-          Personal Details
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border border-gray-200 space-y-5">
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider pb-2 border-b border-gray-100">
+          Pickup Customer Details
         </h2>
         
-        <div className="grid gap-6">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Full Name</label>
             <input 
               type="text" 
               name="name" 
@@ -109,32 +107,33 @@ const Checkout = () => {
               placeholder="Enter your full name"
               required 
               onChange={handleChange} 
-              className="w-full bg-gray-50 border-none px-6 py-4 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none font-bold text-dark" 
+              className="w-full bg-white border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-sm text-dark placeholder:text-gray-400" 
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone Number</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Phone Number</label>
             <input 
               type="tel" 
               name="phone" 
               value={formData.phone}
-              placeholder="eg. 0912 345 6789"
+              placeholder="e.g. 0912 345 6789"
               required 
               onChange={handleChange} 
-              className="w-full bg-gray-50 border-none px-6 py-4 rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all outline-none font-bold text-dark" 
+              className="w-full bg-white border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-sm text-dark placeholder:text-gray-400" 
             />
           </div>
         </div>
 
-        <div className="pt-4">
+        <div className="pt-3">
           <button 
             type="submit" 
-            className="w-full bg-dark text-white py-5 rounded-[2rem] font-black text-lg hover:bg-primary transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+            disabled={isSubmitting}
+            className="w-full bg-dark text-white py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-2 active:translate-y-0.5"
           >
-            Confirm & Place Order
+            {isSubmitting ? 'Placing Order...' : 'Confirm & Place Order'}
           </button>
-          <p className="text-[10px] text-gray-400 font-bold text-center mt-6 uppercase tracking-[0.2em]">Default payment method: GCash</p>
+          <p className="text-[11px] text-gray-500 font-medium text-center mt-3">Payment via GCash or In-Store Cash upon Pickup</p>
         </div>
       </form>
     </div>
