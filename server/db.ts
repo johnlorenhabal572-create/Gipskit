@@ -17,9 +17,27 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 let isConnected = false;
+let connectionPromise: Promise<{ isConnected: boolean; error?: string }> | null = null;
 let lastConnectionAttempt = 0;
 let connectionFailed = false;
-const RETRY_COOLDOWN_MS = 30000; // 30s cooldown after failed attempt to prevent connection thrashing
+const RETRY_COOLDOWN_MS = 15000; // 15s cooldown after failed attempt
+
+// Sanitizes MongoDB connection URIs to handle common copy-paste typos
+export function sanitizeMongoUri(rawUri?: string): string | null {
+  if (!rawUri || typeof rawUri !== 'string') return null;
+  let uri = rawUri.trim();
+
+  // Fix common user copy-paste typos like: "mongodb+I srv://", "mongodb+lsrv://", "mongodb+ srv://", "mongodb+Isrv://"
+  uri = uri.replace(/^mongodb\+([iIl1]|\s|_)*srv:\/\//i, 'mongodb+srv://');
+  uri = uri.replace(/^mongodb:\/\/\s*/i, 'mongodb://');
+  // Remove any internal spaces
+  uri = uri.replace(/\s+/g, '');
+
+  if (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+    return null;
+  }
+  return uri;
+}
 
 // In-memory fallback if MONGODB_URI is not configured or temporarily unreachable
 export const memoryStore = {
@@ -51,20 +69,42 @@ export const memoryStore = {
   orders: [] as any[]
 };
 
+// Monitor Mongoose connection events
+mongoose.connection.on('connected', () => {
+  isConnected = true;
+  connectionFailed = false;
+  console.log(`[MongoDB Atlas] Connected successfully to database: ${mongoose.connection.name || 'ecommerce_db'}`);
+});
+
+mongoose.connection.on('disconnected', () => {
+  isConnected = false;
+  console.warn(`[MongoDB Atlas] Disconnected from database.`);
+});
+
+mongoose.connection.on('error', (err) => {
+  isConnected = false;
+  console.error(`[MongoDB Atlas Error]:`, err.message);
+});
+
 export async function connectMongoose(): Promise<{ isConnected: boolean; error?: string }> {
-  const uri = process.env.MONGODB_URI?.trim();
-
-  if (!uri || (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://'))) {
-    return { isConnected: false, error: 'MONGODB_URI environment variable not provided' };
-  }
-
-  // ReadyState 1 means connected
+  // If already connected, return immediately
   if (mongoose.connection.readyState === 1) {
     isConnected = true;
     return { isConnected: true };
   }
 
-  // Prevent connection thrashing
+  // If a connection attempt is already in flight, reuse it
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  const sanitizedUri = sanitizeMongoUri(process.env.MONGODB_URI);
+
+  if (!sanitizedUri) {
+    return { isConnected: false, error: 'MONGODB_URI environment variable not provided or invalid format' };
+  }
+
+  // Prevent connection thrashing on repeated failures
   const now = Date.now();
   if (connectionFailed && now - lastConnectionAttempt < RETRY_COOLDOWN_MS) {
     return { isConnected: false, error: 'Connection in retry cooldown' };
@@ -72,65 +112,79 @@ export async function connectMongoose(): Promise<{ isConnected: boolean; error?:
 
   lastConnectionAttempt = now;
 
-  try {
-    const dbName = uri.split('/').pop()?.split('?')[0] || 'ecommerce_db';
+  connectionPromise = (async () => {
+    try {
+      const dbName = sanitizedUri.split('/').pop()?.split('?')[0] || 'ecommerce_db';
 
-    await mongoose.connect(uri, {
-      dbName: dbName.includes('?') ? 'ecommerce_db' : dbName,
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000,
-      socketTimeoutMS: 15000,
-      family: 4, // IPv4 preference to avoid container IPv6 TLS handshake issues
-      tls: uri.includes('mongodb+srv://') || uri.includes('ssl=true') || uri.includes('tls=true'),
-      tlsAllowInvalidCertificates: true
-    });
-
-    isConnected = true;
-    connectionFailed = false;
-    console.log(`[Mongoose / MongoDB Atlas] Connected successfully to database: ${mongoose.connection.name}`);
-
-    // Ensure default admin user exists in MongoDB Atlas via Mongoose
-    const adminEmail = (process.env.ADMIN_EMAIL || 'admin@store.com').toLowerCase();
-    const existingAdmin = await User.findOne({ email: adminEmail });
-    if (!existingAdmin) {
-      await User.create({
-        id: 'admin-1',
-        name: 'Store Admin',
-        email: adminEmail,
-        password: process.env.ADMIN_PASSWORD || 'Admin123',
-        role: 'admin',
-        createdAt: new Date(),
-        lastLogin: new Date()
+      await mongoose.connect(sanitizedUri, {
+        dbName: dbName.includes('?') ? 'ecommerce_db' : dbName,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+        socketTimeoutMS: 15000,
+        family: 4, // IPv4 preference to avoid container IPv6 TLS handshake issues
+        tls: sanitizedUri.includes('mongodb+srv://') || sanitizedUri.includes('ssl=true') || sanitizedUri.includes('tls=true'),
+        tlsAllowInvalidCertificates: true
       });
-      console.log(`[Mongoose / MongoDB Atlas] Default admin account seeded: ${adminEmail}`);
-    }
 
-    // Seed default categories if none exist
-    const categoryCount = await Category.countDocuments();
-    if (categoryCount === 0) {
-      for (const catName of DEFAULT_CATEGORIES) {
-        await Category.create({ name: catName }).catch(() => {});
+      isConnected = true;
+      connectionFailed = false;
+
+      // Ensure default admin user exists in MongoDB Atlas via Mongoose
+      const adminEmail = (process.env.ADMIN_EMAIL || 'admin@store.com').toLowerCase();
+      const existingAdmin = await User.findOne({ email: adminEmail });
+      if (!existingAdmin) {
+        await User.create({
+          id: 'admin-1',
+          name: 'Store Admin',
+          email: adminEmail,
+          password: process.env.ADMIN_PASSWORD || 'Admin123',
+          role: 'admin',
+          createdAt: new Date(),
+          lastLogin: new Date()
+        });
+        console.log(`[MongoDB Atlas] Default admin account seeded: ${adminEmail}`);
       }
-      console.log(`[Mongoose / MongoDB Atlas] Default categories seeded.`);
-    }
 
-    return { isConnected: true };
-  } catch (error) {
-    connectionFailed = true;
-    isConnected = false;
-    const errMsg = (error as Error).message?.split('\n')[0];
-    console.warn(`[Mongoose / MongoDB Atlas] Connection notice (${errMsg}). In-memory fallback available.`);
-    return { isConnected: false, error: errMsg };
-  }
+      // Seed default categories if none exist
+      const categoryCount = await Category.countDocuments();
+      if (categoryCount === 0) {
+        for (const catName of DEFAULT_CATEGORIES) {
+          await Category.create({ name: catName }).catch(() => {});
+        }
+        console.log(`[MongoDB Atlas] Default categories seeded.`);
+      }
+
+      return { isConnected: true };
+    } catch (error) {
+      connectionFailed = true;
+      isConnected = false;
+      const errMsg = (error as Error).message?.split('\n')[0];
+      console.warn(`[MongoDB Atlas] Connection notice (${errMsg}). In-memory fallback available.`);
+      return { isConnected: false, error: errMsg };
+    } finally {
+      connectionPromise = null;
+    }
+  })();
+
+  return connectionPromise;
 }
 
-// Utility to get current DB connection status
+// Utility to get current DB connection status instantly
 export async function getDbStatus(): Promise<{ isConnected: boolean; dbName?: string }> {
+  if (isConnected || (mongoose.connection.readyState as number) === 1) {
+    return {
+      isConnected: true,
+      dbName: mongoose.connection.name || undefined
+    };
+  }
+  
+  // If not connected yet and not in cooldown, attempt background connect
   const result = await connectMongoose();
   return {
-    isConnected: result.isConnected && mongoose.connection.readyState === 1,
+    isConnected: result.isConnected && (mongoose.connection.readyState as number) === 1,
     dbName: mongoose.connection.name || undefined
   };
 }
 
 export { mongoose };
+

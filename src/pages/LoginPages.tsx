@@ -552,7 +552,10 @@ const LoginPage = () => {
                       className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {loading ? (
-                        <RefreshCw size={16} className="animate-spin" />
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>Sending Code to Email...</span>
+                        </>
                       ) : (
                         <>
                           <span>Send Verification Code</span>
