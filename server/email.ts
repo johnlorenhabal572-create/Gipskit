@@ -3,57 +3,98 @@ import nodemailer from 'nodemailer';
 let transporter: nodemailer.Transporter | null = null;
 let isTransporterVerified = false;
 
+// Safe error logger that classifies failure types and never exposes passwords/secrets
+function logSafeSmtpError(stage: 'verification' | 'send', error: any, host: string, port: number, user?: string) {
+  const code = error?.code || 'UNKNOWN';
+  const rawMessage = error?.message || String(error);
+  const responseCode = error?.responseCode;
+  const pass = process.env.SMTP_PASS;
+
+  // Sanitize message to strip password if it appears anywhere
+  let safeMessage = rawMessage.split('\n')[0];
+  if (pass && pass.length > 3) {
+    safeMessage = safeMessage.split(pass).join('[REDACTED]');
+  }
+
+  let failureCategory = 'General SMTP Failure';
+  if (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ESOCKETTIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNRESET' ||
+    safeMessage.toLowerCase().includes('connection timeout') ||
+    safeMessage.toLowerCase().includes('timeout')
+  ) {
+    failureCategory = 'Connection Timeout / Network Blocked';
+  } else if (
+    code === 'EAUTH' ||
+    responseCode === 535 ||
+    safeMessage.toLowerCase().includes('bad credentials') ||
+    safeMessage.toLowerCase().includes('username and password not accepted') ||
+    safeMessage.toLowerCase().includes('invalid login')
+  ) {
+    failureCategory = 'Authentication Failed (Check SMTP_USER or Google App Password)';
+  } else if (code === 'EENVELOPE' || safeMessage.toLowerCase().includes('recipient')) {
+    failureCategory = 'Envelope / Recipient Address Invalid';
+  } else if (code === 'EMESSAGE') {
+    failureCategory = 'Message Body / Content Format Error';
+  }
+
+  // Mask user email for privacy (e.g. j***g@gmail.com)
+  const maskedUser = user
+    ? user.replace(/^([^@]{1,2})[^@]*(@.*)$/, '$1***$2')
+    : 'not_configured';
+
+  console.error(`[Email Service - ${failureCategory}] Stage: ${stage} | Endpoint: ${host}:${port} (SSL: ${port === 465}) | Account: ${maskedUser} | Error Code: ${code} | Details: ${safeMessage}`);
+}
+
 export function getTransporter(): nodemailer.Transporter | null {
   if (transporter) return transporter;
 
-  const host = process.env.SMTP_HOST?.trim();
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const host = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT?.trim() || '465', 10);
+  const isSecure = port === 465;
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
 
-  if (user && pass) {
-    const isGmail = host === 'smtp.gmail.com' || (!host && user.endsWith('@gmail.com'));
-    
-    if (isGmail) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-        pool: true,
-        maxConnections: 3,
-        maxMessages: 100,
-        connectionTimeout: 5000,
-        greetingTimeout: 5000,
-        socketTimeout: 8000,
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
-    } else if (host) {
-      transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465,
-        auth: { user, pass },
-        pool: true,
-        maxConnections: 3,
-        maxMessages: 100,
-        connectionTimeout: 5000,
-        greetingTimeout: 5000,
-        socketTimeout: 8000,
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
-    }
+  if (!user || !pass) {
+    console.warn(`[Email Service] SMTP credentials not provided. Set SMTP_USER and SMTP_PASS to enable real email delivery.`);
+    return null;
+  }
+
+  try {
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: isSecure, // true for 465 (SSL), false for 587 (TLS/STARTTLS)
+      auth: {
+        user,
+        pass
+      },
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      connectionTimeout: 10000, // 10s connection timeout for container environments like Render
+      greetingTimeout: 10000,   // 10s greeting timeout
+      socketTimeout: 15000,     // 15s socket activity timeout
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
 
     if (transporter && !isTransporterVerified) {
       transporter.verify().then(() => {
         isTransporterVerified = true;
-        console.log(`[Email Service] SMTP transporter ready and verified for ${user}`);
+        const maskedUser = user.replace(/^([^@]{1,2})[^@]*(@.*)$/, '$1***$2');
+        console.log(`[Email Service] SMTP verified successfully on ${host}:${port} (secure: ${isSecure}) for ${maskedUser}`);
       }).catch((err) => {
-        console.warn(`[Email Service] SMTP verification warning:`, err.message);
+        logSafeSmtpError('verification', err, host, port, user);
       });
     }
+  } catch (err) {
+    logSafeSmtpError('verification', err, host, port, user);
+    transporter = null;
   }
 
   return transporter;
@@ -64,7 +105,7 @@ setTimeout(() => {
   try {
     getTransporter();
   } catch (e) {
-    // Ignore init error
+    // Suppress startup exceptions
   }
 }, 500);
 
@@ -75,11 +116,15 @@ export async function sendVerificationEmail(toEmail: string, code: string): Prom
   console.log(`⏳ Valid for 10 minutes.`);
   console.log(`==============================================\n`);
 
+  const host = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT?.trim() || '465', 10);
+  const user = process.env.SMTP_USER?.trim();
+
   const mailer = getTransporter();
-  if (mailer) {
+  if (mailer && user) {
     const startTime = Date.now();
     try {
-      const fromAddress = process.env.SMTP_FROM || `"Gip's Kitchen" <${process.env.SMTP_USER}>`;
+      const fromAddress = process.env.SMTP_FROM?.trim() || `"Gip's Kitchen" <${user}>`;
       
       const info = await mailer.sendMail({
         from: fromAddress,
@@ -140,14 +185,16 @@ export async function sendVerificationEmail(toEmail: string, code: string): Prom
       });
 
       const elapsed = Date.now() - startTime;
-      console.log(`[Email Service] Verification code email sent to ${toEmail} in ${elapsed}ms. MessageId: ${info.messageId}`);
+      console.log(`[Email Service] Verification code email successfully delivered to ${toEmail} in ${elapsed}ms. MessageId: ${info.messageId}`);
       return { sent: true, previewCode: code };
     } catch (err) {
-      const elapsed = Date.now() - startTime;
-      console.error(`[Email Service] Failed to send email via SMTP (${elapsed}ms):`, (err as Error).message);
+      logSafeSmtpError('send', err, host, port, user);
+      // Invalidate transporter on send error so next attempt tries a fresh socket
+      transporter = null;
+      isTransporterVerified = false;
     }
   } else {
-    console.warn(`[Email Service] SMTP Transporter not configured. Check SMTP_USER / SMTP_PASS in settings.`);
+    console.warn(`[Email Service] SMTP Transporter not ready. Verification code logged to server output.`);
   }
 
   return { sent: false, previewCode: code };
