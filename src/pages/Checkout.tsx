@@ -133,7 +133,7 @@ const Checkout = () => {
           >
             {isSubmitting ? 'Placing Order...' : 'Confirm & Place Order'}
           </button>
-          <p className="text-[11px] text-gray-500 font-medium text-center mt-3">Payment via GCash or In-Store Cash upon Pickup</p>
+          <p className="text-[11px] text-gray-500 font-medium text-center mt-3">Pay first via GCash in My Bill to confirm your order</p>
         </div>
       </form>
     </div>

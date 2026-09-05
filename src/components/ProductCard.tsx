@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, ShoppingBag, Eye, X, Check, Package, Tag, AlertCircle } from 'lucide-react';
+import { Plus, Eye, X, Check, Package, Tag, AlertCircle, LogIn, ShoppingBag } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 const ProductCard = ({ product }: { product: any }) => {
@@ -31,10 +31,10 @@ const ProductCard = ({ product }: { product: any }) => {
 
   return (
     <>
-      <div className={`border border-gray-200 rounded-xl p-4 bg-white flex flex-col justify-between transition-all duration-200 ${!isAvailable ? 'opacity-70 bg-gray-50' : 'hover:border-dark/60 hover:shadow-sm'}`}>
+      <div className={`border border-gray-200 rounded-xl p-2.5 sm:p-3.5 bg-white flex flex-col justify-between transition-all duration-200 ${!isAvailable ? 'opacity-70 bg-gray-50' : 'hover:border-dark/60 hover:shadow-sm'}`}>
         <div>
           <div 
-            className="aspect-square rounded-lg mb-3 overflow-hidden bg-gray-100 relative border border-gray-100 group cursor-pointer"
+            className="aspect-square rounded-lg mb-2 overflow-hidden bg-gray-100 relative border border-gray-100 group cursor-pointer"
             onClick={() => setShowDetailModal(true)}
           >
             <img 
@@ -44,58 +44,60 @@ const ProductCard = ({ product }: { product: any }) => {
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <span className="bg-white/95 text-dark px-3 py-1.5 rounded-lg text-xs font-bold shadow flex items-center gap-1.5">
-                <Eye size={14} /> View Details
+              <span className="bg-white/95 text-dark p-2 rounded-lg text-xs font-bold shadow flex items-center justify-center" title="View Details">
+                <Eye size={16} />
               </span>
             </div>
             {!isAvailable && (
               <div className="absolute inset-0 bg-dark/70 flex items-center justify-center">
-                <span className="bg-white text-dark px-3 py-1 rounded text-[11px] font-bold uppercase tracking-wider border border-gray-300">
+                <span className="bg-white text-dark px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border border-gray-300">
                   Out of Stock
                 </span>
               </div>
             )}
           </div>
 
-          <div className="flex justify-between items-start mb-1">
+          <div className="flex justify-between items-start mb-1 gap-1">
             <h3 
               onClick={() => setShowDetailModal(true)}
-              className="font-bold text-dark text-sm leading-tight cursor-pointer hover:text-primary transition-colors"
+              className="font-bold text-dark text-xs sm:text-sm leading-tight cursor-pointer hover:text-primary transition-colors truncate"
+              title={product.name}
             >
               {product.name}
             </h3>
-            <span className="text-primary font-black text-sm ml-2 shrink-0">₱{product.price}</span>
+            <span className="text-primary font-black text-xs sm:text-sm shrink-0">₱{product.price}</span>
           </div>
 
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{product.category}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
+          <div className="flex justify-between items-center mb-1.5 gap-1">
+            <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">{product.category}</span>
+            <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border ${
               product.stock <= 5 
                 ? 'bg-red-50 text-red-600 border-red-200' 
                 : 'bg-gray-50 text-gray-500 border-gray-200'
             }`}>
-              Stock: {product.stock}
+              {product.stock} left
             </span>
           </div>
 
           {/* Short description preview if available */}
           {product.description && (
-            <p className="text-xs text-gray-500 line-clamp-2 mb-3 leading-relaxed">
+            <p className="hidden sm:line-clamp-1 text-[11px] text-gray-500 mb-2 leading-relaxed">
               {product.description}
             </p>
           )}
         </div>
         
-        {/* Action Buttons: View & Add to Cart */}
-        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100">
+        {/* Action Buttons: View (Eye icon) & Order (Plus icon) */}
+        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
           <button 
             type="button"
             id={`product-view-btn-${product.id}`}
             onClick={() => setShowDetailModal(true)}
-            className="w-full py-2 px-2.5 rounded-lg font-bold text-xs bg-gray-50 text-dark hover:bg-gray-100 border border-gray-200 transition-colors flex items-center justify-center gap-1.5 uppercase tracking-wider"
+            className="w-full py-2 rounded-lg font-bold text-xs bg-gray-50 text-dark hover:bg-gray-100 border border-gray-200 transition-colors flex items-center justify-center"
+            title="View Details"
+            aria-label="View Details"
           >
-            <Eye size={14} />
-            <span>View</span>
+            <Eye size={16} />
           </button>
 
           {!user ? (
@@ -103,10 +105,11 @@ const ProductCard = ({ product }: { product: any }) => {
               type="button"
               id={`product-signin-btn-${product.id}`}
               onClick={() => handleAddToCart(1)}
-              className="w-full py-2 px-2 rounded-lg font-bold text-xs bg-dark text-white hover:bg-primary transition-colors flex items-center justify-center gap-1 uppercase tracking-wider"
+              className="w-full py-2 rounded-lg font-bold text-xs bg-dark text-white hover:bg-primary transition-colors flex items-center justify-center"
+              title="Order"
+              aria-label="Order"
             >
-              <LogIn size={14} />
-              <span>Order</span>
+              <Plus size={16} />
             </button>
           ) : (
             <button 
@@ -114,7 +117,9 @@ const ProductCard = ({ product }: { product: any }) => {
               id={`product-addcart-btn-${product.id}`}
               onClick={() => handleAddToCart(1)}
               disabled={!isAvailable}
-              className={`w-full py-2 px-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1 uppercase tracking-wider ${
+              title={!isAvailable ? 'Out of Stock' : addedNotice ? 'Added' : 'Order'}
+              aria-label={!isAvailable ? 'Out of Stock' : addedNotice ? 'Added' : 'Order'}
+              className={`w-full py-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center ${
                 isAvailable 
                   ? addedNotice 
                     ? 'bg-green-600 text-white border border-green-600'
@@ -123,15 +128,9 @@ const ProductCard = ({ product }: { product: any }) => {
               }`}
             >
               {addedNotice ? (
-                <>
-                  <Check size={14} />
-                  <span>Added</span>
-                </>
+                <Check size={16} />
               ) : (
-                <>
-                  <ShoppingBag size={14} />
-                  <span>{isAvailable ? 'Add' : 'Out'}</span>
-                </>
+                <Plus size={16} />
               )}
             </button>
           )}

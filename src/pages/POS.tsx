@@ -34,6 +34,12 @@ const POS = () => {
   const [shiftReportData, setShiftReportData] = useState<any | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
 
+  // Custom Item Modal State
+  const [isCustomItemModalOpen, setIsCustomItemModalOpen] = useState(false);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [customItemQty, setCustomItemQty] = useState('1');
+
   const [isOrderPanelOpen, setIsOrderPanelOpen] = useState(false);
 
   const { user } = useContext(AuthContext) as any;
@@ -82,6 +88,40 @@ const POS = () => {
 
   const removeFromPosCart = (productId: any) => {
     setPosCart(posCart.filter(item => item.id !== productId));
+  };
+
+  const handleAddCustomItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = parseFloat(customItemPrice);
+    if (!customItemName.trim()) {
+      showNotification('Please enter an item name.');
+      return;
+    }
+    if (isNaN(priceNum) || priceNum < 0) {
+      showNotification('Please enter a valid price.');
+      return;
+    }
+    const qtyNum = parseInt(customItemQty) || 1;
+    const customItem = {
+      id: `custom-${Date.now()}`,
+      name: customItemName.trim(),
+      price: priceNum,
+      quantity: qtyNum,
+      category: 'Custom',
+      stock: 999
+    };
+    setPosCart(prev => {
+      const existing = prev.find(i => i.name.toLowerCase() === customItem.name.toLowerCase() && i.price === customItem.price);
+      if (existing) {
+        return prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + qtyNum } : i);
+      }
+      return [...prev, customItem];
+    });
+    showNotification(`${customItem.name} added to bill!`);
+    setCustomItemName('');
+    setCustomItemPrice('');
+    setCustomItemQty('1');
+    setIsCustomItemModalOpen(false);
   };
 
   const updateQuantity = (productId: any, delta: number) => {
@@ -223,6 +263,15 @@ const POS = () => {
               </div>
 
               <button
+                onClick={() => setIsCustomItemModalOpen(true)}
+                className="px-3 py-2 bg-white border border-gray-300 text-dark rounded-lg text-xs font-bold flex items-center gap-1.5 hover:bg-gray-50 hover:border-dark transition-colors shrink-0"
+                title="Add custom item to bill"
+              >
+                <Plus size={14} />
+                <span>Add Item</span>
+              </button>
+
+              <button
                 onClick={handleOpenShiftReport}
                 className="px-3 py-2 bg-dark text-white rounded-lg text-xs font-bold flex items-center gap-1.5 hover:bg-primary transition-colors shrink-0"
                 title="End of Shift Sales Report"
@@ -297,12 +346,29 @@ const POS = () => {
 
                     <div>
                       <p className="text-xs font-bold text-dark line-clamp-1 mb-1">{product.name}</p>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-primary font-black text-sm">₱{Number(product.price).toFixed(2)}</span>
                         <span className={`text-[10px] font-bold uppercase ${product.stock <= 5 ? 'text-red-600' : 'text-gray-400'}`}>
                           {product.stock} left
                         </span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isAvailable) addToPosCart(product);
+                        }}
+                        disabled={!isAvailable}
+                        className={`w-full py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 uppercase tracking-wider transition-colors ${
+                          isAvailable
+                            ? 'bg-dark text-white hover:bg-primary active:scale-95'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={isAvailable ? 'Add to bill' : 'Out of stock'}
+                      >
+                        <Plus size={13} />
+                        <span>Add</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -368,6 +434,19 @@ const POS = () => {
                 className="w-full px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white border border-gray-300 outline-none focus:border-dark text-dark"
               />
             </div>
+          </div>
+
+          {/* Cart Item List Header */}
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ordered Items</span>
+            <button
+              onClick={() => setIsCustomItemModalOpen(true)}
+              className="text-[11px] font-bold text-dark hover:text-primary flex items-center gap-1 transition-colors"
+              title="Add custom item"
+            >
+              <Plus size={12} />
+              <span>Add Item</span>
+            </button>
           </div>
 
           {/* Cart Item List */}
@@ -696,6 +775,110 @@ const POS = () => {
                 <p className="text-xs text-gray-500 text-center py-4">No shift data available.</p>
               )}
             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Item Modal */}
+      <AnimatePresence>
+        {isCustomItemModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCustomItemModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-10"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-dark text-white flex items-center justify-center">
+                    <Plus size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-dark tracking-tight">Add Custom Item</h2>
+                    <p className="text-xs text-gray-500">Add an off-menu item or special charge</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsCustomItemModalOpen(false)}
+                  className="p-1 rounded-full text-gray-400 hover:text-dark hover:bg-gray-100 transition-colors"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddCustomItem} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">
+                    Item Description / Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Extra Rice, Special Side Dish, Corkage"
+                    value={customItemName}
+                    onChange={(e) => setCustomItemName(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-dark"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Price (₱)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      placeholder="0.00"
+                      value={customItemPrice}
+                      onChange={(e) => setCustomItemPrice(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-dark font-bold text-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={customItemQty}
+                      onChange={(e) => setCustomItemQty(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-dark font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomItemModalOpen(false)}
+                    className="flex-1 py-2.5 rounded-lg border border-gray-300 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-lg bg-dark text-white hover:bg-primary text-xs font-bold transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5"
+                  >
+                    <Plus size={14} />
+                    <span>Add to Order</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingCart, Flame, User, LogOut, Menu as MenuIcon, X, Home, Utensils, Info, ClipboardList, Settings, CheckCircle2, TrendingUp, RefreshCw, Users, BarChart2, CreditCard, History, Receipt } from 'lucide-react';
 import { IMAGES } from '../constants/images';
@@ -6,6 +6,60 @@ import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'motion/react';
+
+/**
+ * Calculates initials based on the user's first name:
+ * - When the first name consists of 1 word -> 1 letter (e.g. "Juan" -> "J", "Alex" -> "A")
+ * - When the first name consists of 2 words -> 2 letters (e.g. "John Paul" -> "JP", "Mary Jane" -> "MJ", "Store Admin" -> "SA")
+ * - If 3 or more words (e.g. "Juan Dela Cruz" or "John Paul Smith"):
+ *   - "Juan Dela Cruz" -> First name is "Juan" (1 word) -> "J"
+ *   - "John Paul Smith" -> First name is "John Paul" (2 words) -> "JP"
+ *   - "Maria Clara Santos" -> First name is "Maria Clara" (2 words) -> "MC"
+ */
+export function getFirstNameInitials(name?: string): string {
+  if (!name || typeof name !== 'string') return 'U';
+  
+  const trimmed = name.trim();
+  if (!trimmed) return 'U';
+
+  const cleanName = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
+  const words = cleanName.split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) return 'U';
+
+  // 1 word -> exactly 1 letter
+  if (words.length === 1) {
+    return words[0].charAt(0).toUpperCase();
+  }
+
+  // Common compound first name starters
+  const TWO_WORD_FIRST_NAME_STARTERS = new Set([
+    'john', 'mary', 'maria', 'juan', 'mark', 'anne', 'anna', 
+    'charles', 'paul', 'jose', 'michael', 'store', 'billy', 'louie', 'carl'
+  ]);
+
+  // Common compound surname particles
+  const SURNAME_PARTICLES = new Set([
+    'de', 'del', 'dela', 'delos', 'san', 'santa', 'sta', 'von', 'van'
+  ]);
+
+  const firstLower = words[0].toLowerCase();
+  const secondLower = words[1].toLowerCase();
+
+  // If 3 or more words
+  if (words.length >= 3) {
+    if (SURNAME_PARTICLES.has(secondLower)) {
+      return words[0].charAt(0).toUpperCase();
+    }
+    if (TWO_WORD_FIRST_NAME_STARTERS.has(firstLower)) {
+      return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+    }
+    return words[0].charAt(0).toUpperCase();
+  }
+
+  // Exactly 2 words: 2 letters (e.g. "Store Admin" -> "SA", "John Paul" -> "JP")
+  return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+}
 
 const Navbar = () => {
   const { cart, notification } = useContext(CartContext) as any;
@@ -15,7 +69,41 @@ const Navbar = () => {
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
   const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+  // Close dropdown on click/tap outside or pressing Escape
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setIsProfileDropdownOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsProfileDropdownOpen(false);
+      }
+    }
+
+    if (isProfileDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileDropdownOpen]);
+
+  // Close dropdown when route changes
+  useEffect(() => {
+    setIsProfileDropdownOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -149,15 +237,89 @@ const Navbar = () => {
                 <span>Sign In</span>
               </Link>
             ) : (
-              <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 py-1.5 px-3 rounded-lg">
-                  <div className="w-5 h-5 bg-primary text-white rounded text-[11px] font-bold flex items-center justify-center">
-                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-xs font-bold text-dark truncate max-w-[120px]">
-                    {user.name}
+              <div ref={profileDropdownRef} className="relative flex items-center gap-2 pl-2 border-l border-gray-200">
+                <div 
+                  id="header-user-avatar"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setIsProfileDropdownOpen(prev => !prev)}
+                  onKeyDown={(e) => { 
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setIsProfileDropdownOpen(prev => !prev);
+                    }
+                  }}
+                  title={user.name}
+                  aria-label={`User profile for ${user.name}`}
+                  aria-expanded={isProfileDropdownOpen}
+                  aria-haspopup="true"
+                  className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-black text-xs shadow-sm hover:ring-2 hover:ring-primary/40 hover:opacity-95 transition-all select-none cursor-pointer border border-primary/20 active:scale-95"
+                >
+                  <span className="leading-none tracking-tight">
+                    {getFirstNameInitials(user.name)}
                   </span>
                 </div>
+
+                {/* Profile Dropdown Menu */}
+                <AnimatePresence>
+                  {isProfileDropdownOpen && (
+                    <motion.div
+                      id="profile-dropdown"
+                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                      transition={{ duration: 0.12, ease: 'easeOut' }}
+                      className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden"
+                    >
+                      {/* User Information */}
+                      <div className="p-4 text-center">
+                        {/* JR — profile initials prominently */}
+                        <div 
+                          id="profile-dropdown-initials"
+                          className="w-12 h-12 mx-auto rounded-full bg-primary text-white flex items-center justify-center font-black text-base shadow-sm border border-primary/20 mb-2.5 select-none"
+                        >
+                          <span className="leading-none tracking-tight">
+                            {getFirstNameInitials(user.name)}
+                          </span>
+                        </div>
+
+                        {/* Full name */}
+                        <h4 
+                          id="profile-dropdown-name" 
+                          className="font-bold text-dark text-sm leading-snug break-words"
+                        >
+                          {user.name}
+                        </h4>
+
+                        {/* Gmail address */}
+                        <p 
+                          id="profile-dropdown-email" 
+                          className="text-xs text-gray-500 mt-0.5 break-all font-medium"
+                        >
+                          {user.email}
+                        </p>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-100" />
+
+                      {/* Logout option */}
+                      <div className="p-1.5">
+                        <button
+                          id="profile-dropdown-logout-btn"
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false);
+                            handleLogout();
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <LogOut size={14} />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
           </div>
@@ -246,8 +408,10 @@ const Navbar = () => {
             {user ? (
               <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 bg-primary text-white rounded font-bold text-xs flex items-center justify-center shrink-0">
-                    {user.name.charAt(0)}
+                  <div className="w-8 h-8 bg-primary text-white rounded-full font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border border-primary/20">
+                    <span className="leading-none tracking-tight font-black">
+                      {getFirstNameInitials(user.name)}
+                    </span>
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold truncate text-dark">{user.name}</p>

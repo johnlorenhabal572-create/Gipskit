@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
 import { AnimatePresence } from 'motion/react';
-import { X, Eye, Receipt as ReceiptIcon, Search, Trash2 } from 'lucide-react';
+import { X, Receipt as ReceiptIcon, Search } from 'lucide-react';
 
 const TransactionHistory = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
@@ -105,20 +105,12 @@ const TransactionHistory = () => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center">
                     <button 
                       onClick={() => setSelectedOrder(order)}
-                      className="p-1.5 bg-white border border-gray-300 text-gray-600 hover:text-dark hover:border-dark rounded-lg transition-colors"
-                      title="View Details"
+                      className="px-3.5 py-1.5 bg-white border border-gray-300 text-dark hover:bg-dark hover:text-white hover:border-dark rounded-lg transition-colors text-xs font-bold uppercase tracking-wider"
                     >
-                      <Eye size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(order.id)}
-                      className="p-1.5 bg-white border border-gray-300 text-gray-600 hover:text-red-600 hover:border-red-300 rounded-lg transition-colors"
-                      title="Delete Transaction"
-                    >
-                      <Trash2 size={16} />
+                      View
                     </button>
                   </div>
 

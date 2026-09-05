@@ -32,7 +32,7 @@ const About = () => {
     {
       step: "02",
       title: "Fast Payment & Confirmation",
-      description: "Pay quickly via GCash or settle your bill over the counter upon pickup. Track your order status in your personal bill dashboard.",
+      description: "Pay first via GCash or online payment to confirm your order before preparation starts. Track your order status in your personal bill dashboard.",
       icon: <CheckCircle2 size={18} />,
       image: IMAGES.INNOVATION_IMG
     },
@@ -116,39 +116,23 @@ const About = () => {
 
         {/* Meet the Kitchen Crew */}
         <div className="bg-white rounded-xl border border-gray-200 p-8 md:p-12">
-          <div className="grid md:grid-cols-2 gap-10 items-center">
-            <div>
-              <div className="inline-flex items-center gap-1.5 bg-dark text-white px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider mb-4">
-                <Store size={14} />
-                <span>Direct Store Pickup</span>
-              </div>
-              <h2 className="text-2xl md:text-3xl font-black text-dark mb-4 tracking-tight">Prepared Fresh by our Kitchen Crew</h2>
-              <p className="text-xs md:text-sm text-gray-600 leading-relaxed mb-6 font-medium">
-                Our kitchen team personally manages and prepares every online takeout order with precision. When you arrive at Gip's Kitchen, your food is hot, packaged securely, and ready for you to pick up at the counter.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3.5 p-3.5 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="w-10 h-10 rounded-lg bg-dark text-white flex items-center justify-center font-bold text-xs">GK</div>
-                  <div>
-                    <p className="font-bold text-dark text-xs">Gip's Kitchen Counter Pickup</p>
-                    <p className="text-[11px] text-gray-500 font-medium">Order ahead & pick up your own food in Bulan</p>
-                  </div>
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-1.5 bg-dark text-white px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider mb-4">
+              <Store size={14} />
+              <span>Direct Store Pickup</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-black text-dark mb-4 tracking-tight">Prepared Fresh by our Kitchen Crew</h2>
+            <p className="text-xs md:text-sm text-gray-600 leading-relaxed mb-6 font-medium">
+              Our kitchen team personally manages and prepares every online takeout order with precision. When you arrive at Gip's Kitchen, your food is hot, packaged securely, and ready for you to pick up at the counter.
+            </p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3.5 p-3.5 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="w-10 h-10 rounded-lg bg-dark text-white flex items-center justify-center font-bold text-xs">GK</div>
+                <div>
+                  <p className="font-bold text-dark text-xs">Gip's Kitchen Counter Pickup</p>
+                  <p className="text-[11px] text-gray-500 font-medium">Order ahead & pick up your own food in Bulan</p>
                 </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <img 
-                src={IMAGES.ABOUT_TEAM_1} 
-                alt="Chef" 
-                className="rounded-lg border border-gray-200 aspect-[4/5] object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <img 
-                src={IMAGES.ABOUT_TEAM_2} 
-                alt="Kitchen Crew" 
-                className="rounded-lg border border-gray-200 aspect-[4/5] object-cover mt-6"
-                referrerPolicy="no-referrer"
-              />
             </div>
           </div>
         </div>

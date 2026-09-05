@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
-import { Search, Clock, Eye, Trash2, X, Utensils } from 'lucide-react';
+import { Search, Clock, X, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const CustomerOrderHistory = () => {
@@ -106,20 +106,12 @@ const CustomerOrderHistory = () => {
               </div>
               
               <div className="flex flex-row md:flex-col md:items-end justify-between items-center gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
-                <div className="flex items-center gap-2">
-                   <button 
-                    onClick={() => setSelectedOrder(order)}
-                    className="p-2 bg-gray-50 text-gray-600 hover:text-dark hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                    title="View Details"
-                  >
-                    <Eye size={16} />
-                  </button>
+                <div className="flex items-center">
                   <button 
-                    onClick={() => handleDelete(order.id)}
-                    className="p-2 bg-gray-50 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 hover:border-red-200"
-                    title="Delete Order"
+                    onClick={() => setSelectedOrder(order)}
+                    className="px-3.5 py-1.5 bg-gray-50 text-dark hover:bg-dark hover:text-white rounded-lg transition-colors border border-gray-200 text-xs font-bold uppercase tracking-wider"
                   >
-                    <Trash2 size={16} />
+                    View
                   </button>
                 </div>
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{order.items?.length || 0} Item(s)</p>

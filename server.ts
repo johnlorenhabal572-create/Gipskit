@@ -116,14 +116,18 @@ async function startServer() {
         });
       }
 
-      // Dispatch verification code via email transporter
-      const { sent } = await sendVerificationEmail(email, code);
+      // Dispatch verification code via Brevo HTTPS Transactional Email API
+      const result = await sendVerificationEmail(email, code);
+
+      if (!result.sent) {
+        return res.status(500).json({
+          error: result.error || 'Failed to send verification email. Please check your Brevo configuration or try again later.'
+        });
+      }
 
       return res.json({
         success: true,
-        message: sent 
-          ? `A 6-digit verification code has been sent to ${email}. Please check your inbox.` 
-          : `A 6-digit verification code has been sent to ${email}. Please check your inbox.`,
+        message: `A 6-digit verification code has been sent to ${email}. Please check your inbox.`,
         email
       });
     } catch (error) {
