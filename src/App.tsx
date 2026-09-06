@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext'; // 1. Import AuthProvider
+import { NotificationProvider } from './context/NotificationContext';
 import Navbar from './components/NavBar';
 import LandingPage from './pages/LandingPage';
 import Catalog from './pages/Catalog';
@@ -24,30 +25,32 @@ import SalesReport from './pages/SalesReport';
 function App() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <Router>
-          <div className="min-h-screen bg-white flex flex-col">
-            <Navbar />
-            <main className="flex-1">
-              <Routes>
-                {/* Public Routes (Menu Browsing & Info) */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/menu" element={<Catalog />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/login" element={<LoginPage />} />
-                
-                {/* Customer Authenticated Routes */}
-                <Route path="/checkout" element={
-                  <ProtectedRoute>
-                    <Checkout />
-                  </ProtectedRoute>
-                } />
-                <Route path="/my-orders" element={
-                  <ProtectedRoute>
-                    <CustomerOrderHistory />
-                  </ProtectedRoute>
-                } />
-                <Route path="/my-bill" element={
+      <NotificationProvider>
+        <CartProvider>
+          <Router>
+            <div className="min-h-screen bg-white flex flex-col text-dark">
+              <Navbar />
+              <main className="flex-1">
+                <Routes>
+                  {/* Public Routes (Menu Browsing & Info) */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/menu" element={<Catalog />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  
+                  {/* Customer Authenticated Routes */}
+                  <Route path="/checkout" element={
+                    <ProtectedRoute>
+                      <Checkout />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/my-orders" element={
+                    <ProtectedRoute>
+                      <CustomerOrderHistory />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/order-history" element={<Navigate to="/my-orders" replace />} />
+                  <Route path="/my-bill" element={
                   <ProtectedRoute>
                     <MyBill />
                   </ProtectedRoute>
@@ -130,6 +133,7 @@ function App() {
           </div>
         </Router>
       </CartProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

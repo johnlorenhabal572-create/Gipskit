@@ -7,6 +7,8 @@ export interface IInventoryItem extends Document {
   unit: string;
   stableQuantity: number;
   lowStockThreshold: number;
+  lowStockAcknowledged?: boolean;
+  lowStockAcknowledgedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,7 +20,9 @@ const InventoryItemSchema: Schema<IInventoryItem> = new Schema(
     quantity: { type: Number, required: true, min: 0, default: 0 },
     unit: { type: String, required: true, default: 'pcs', trim: true },
     stableQuantity: { type: Number, default: 0, min: 0 },
-    lowStockThreshold: { type: Number, default: 10, min: 0 }
+    lowStockThreshold: { type: Number, default: 10, min: 0 },
+    lowStockAcknowledged: { type: Boolean, default: false, index: true },
+    lowStockAcknowledgedAt: { type: Date, default: null }
   },
   {
     timestamps: true,

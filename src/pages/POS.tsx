@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Plus, Minus, Trash2, CheckCircle2, User, CreditCard, 
   XCircle, ShoppingCart, Receipt, DollarSign, Wallet, 
-  Printer, ArrowRight, FileText, BarChart3, RefreshCw
+  ArrowRight, FileText, BarChart3, RefreshCw
 } from 'lucide-react';
 
 const POS = () => {
@@ -229,27 +229,13 @@ const POS = () => {
     }
   };
 
-  const handlePrintReceipt = () => {
-    window.print();
-  };
-
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans relative">
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* Left Side: Product Catalog */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header Bar */}
-          <div className="bg-white p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gray-100 text-dark flex items-center justify-center font-black text-xs border border-gray-200">
-                POS
-              </div>
-              <div>
-                <h1 className="text-lg font-black text-dark tracking-tight">Point of Sale</h1>
-                <p className="text-xs text-gray-500">Counter & Walk-in Terminal</p>
-              </div>
-            </div>
-
+          <div className="bg-white p-3 sm:p-4 flex flex-col sm:flex-row justify-end items-center gap-3 border-b border-gray-200">
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -628,14 +614,17 @@ const POS = () => {
               <button
                 onClick={handleConfirmOrder}
                 disabled={!isAmountSufficient || isProcessing}
-                className="w-full py-3 bg-dark text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-2 active:translate-y-0.5 disabled:opacity-40"
+                className="w-full py-3 bg-dark text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-2 active:translate-y-0.5 disabled:opacity-50"
               >
                 {isProcessing ? (
-                  <span>Processing Order...</span>
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Processing...</span>
+                  </>
                 ) : (
                   <>
                     <CheckCircle2 size={16} />
-                    <span>Complete Order & Print Receipt</span>
+                    <span>Complete Order</span>
                   </>
                 )}
               </button>
@@ -694,19 +683,12 @@ const POS = () => {
                 )}
               </div>
 
-              <div className="pt-4 flex gap-2 font-sans">
-                <button
-                  onClick={handlePrintReceipt}
-                  className="flex-1 py-2.5 bg-dark text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-primary transition-colors"
-                >
-                  <Printer size={14} />
-                  Print
-                </button>
+              <div className="pt-4 flex font-sans">
                 <button
                   onClick={() => setCompletedOrder(null)}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors"
+                  className="w-full py-2.5 bg-dark text-white rounded-lg text-xs font-bold hover:bg-primary transition-colors active:translate-y-0.5"
                 >
-                  Next Order
+                  Done / Next Order
                 </button>
               </div>
             </div>
@@ -760,16 +742,6 @@ const POS = () => {
                       <p className="text-xs text-gray-400">No completed transactions today.</p>
                     )}
                   </div>
-
-                  <button
-                    onClick={() => {
-                      window.print();
-                    }}
-                    className="w-full py-2.5 bg-dark text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-primary transition-colors"
-                  >
-                    <Printer size={15} />
-                    Print Shift Summary
-                  </button>
                 </div>
               ) : (
                 <p className="text-xs text-gray-500 text-center py-4">No shift data available.</p>

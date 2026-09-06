@@ -291,6 +291,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
       oldQty = currentItem.quantity;
       Object.assign(currentItem, updates);
+      if (qtyChanged) {
+        const threshold = currentItem.lowStockThreshold || 10;
+        if (newQty > threshold || (newQty <= threshold && oldQty > threshold)) {
+          currentItem.lowStockAcknowledged = false;
+        }
+      }
       const saved = await currentItem.save();
 
       // Log quantity change if any
@@ -319,6 +325,12 @@ router.put('/:id', async (req: Request, res: Response) => {
       oldQty = memoryStore.inventory[idx].quantity;
       memoryStore.inventory[idx] = { ...memoryStore.inventory[idx], ...updates };
       const currentItem = memoryStore.inventory[idx];
+      if (qtyChanged) {
+        const threshold = currentItem.lowStockThreshold || 10;
+        if (newQty > threshold || (newQty <= threshold && oldQty > threshold)) {
+          currentItem.lowStockAcknowledged = false;
+        }
+      }
 
       if (qtyChanged && oldQty !== newQty) {
         const diff = newQty - oldQty;
@@ -426,6 +438,11 @@ router.patch('/:id/stock', async (req: Request, res: Response) => {
       performedBy: performer,
       date: new Date()
     };
+
+    const threshold = item.lowStockThreshold || 10;
+    if (targetQty > threshold || (targetQty <= threshold && currentQty > threshold)) {
+      item.lowStockAcknowledged = false;
+    }
 
     if (isConnected) {
       item.quantity = targetQty;

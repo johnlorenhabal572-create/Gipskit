@@ -4,6 +4,7 @@ import { ShoppingCart, Flame, User, LogOut, Menu as MenuIcon, X, Home, Utensils,
 import { IMAGES } from '../constants/images';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -64,6 +65,7 @@ export function getFirstNameInitials(name?: string): string {
 const Navbar = () => {
   const { cart, notification } = useContext(CartContext) as any;
   const { user, logout } = useContext(AuthContext) as any;
+  const { customerOrderUpdates, adminNewOrders, adminLowStock } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -72,6 +74,13 @@ const Navbar = () => {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+  // Calculate total unread notifications for the user
+  const totalUnreadNotifications = user?.role === 'customer' 
+    ? customerOrderUpdates 
+    : ((user?.role === 'admin' || user?.role === 'staff') 
+        ? (adminNewOrders + adminLowStock) 
+        : 0);
 
   // Close dropdown on click/tap outside or pressing Escape
   useEffect(() => {
@@ -132,11 +141,11 @@ const Navbar = () => {
           title: 'Staff & Admin Panel',
           links: [
             { name: 'Dashboard', path: '/dashboard', icon: <TrendingUp size={20} /> },
-            { name: 'Manage Orders', path: '/admin', icon: <ClipboardList size={20} /> },
+            { name: 'Manage Orders', path: '/admin', icon: <ClipboardList size={20} />, badge: adminNewOrders },
             { name: 'POS', path: '/pos', icon: <Utensils size={20} /> },
             { name: 'Transaction History', path: '/history', icon: <History size={20} /> },
             { name: 'Manage Menu', path: '/manage-menu', icon: <Utensils size={20} /> },
-            { name: 'Manage Inventory', path: '/manage-inventory', icon: <Settings size={20} /> },
+            { name: 'Manage Inventory', path: '/manage-inventory', icon: <Settings size={20} />, badge: adminLowStock },
             { name: 'Reorder List', path: '/reorder-list', icon: <RefreshCw size={20} /> },
             { name: 'Sales Report', path: '/sales-report', icon: <BarChart2 size={20} /> },
           ]
@@ -163,7 +172,7 @@ const Navbar = () => {
         {
           title: 'Account',
           links: [
-            { name: 'My Order', path: '/my-orders', icon: <ClipboardList size={20} /> },
+            { name: 'Order History', path: '/my-orders', icon: <ClipboardList size={20} />, badge: customerOrderUpdates },
             { name: 'My Bill', path: '/my-bill', icon: <Receipt size={20} /> },
           ]
         }
@@ -188,10 +197,21 @@ const Navbar = () => {
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)} 
-              className="p-2 text-dark hover:bg-gray-100 rounded-lg transition-colors"
+              className="relative p-2 text-dark hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Toggle navigation menu"
             >
               <MenuIcon size={22} />
+              {totalUnreadNotifications > 0 && (
+                <motion.span
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  className="absolute -top-0.5 -right-0.5 bg-red-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center border-2 border-white shadow-sm"
+                  title={`${totalUnreadNotifications} new notifications`}
+                >
+                  {totalUnreadNotifications}
+                </motion.span>
+              )}
             </button>
             <Link to="/" className="hidden sm:flex items-center gap-2.5 text-lg font-black tracking-tight">
               <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-dark shadow-sm border border-gray-800 shrink-0">
@@ -384,17 +404,30 @@ const Navbar = () => {
                       <Link 
                         key={link.name} 
                         to={link.path} 
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+                        className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
                           isActive 
                             ? 'bg-primary/10 text-primary border border-primary/20' 
                             : 'text-gray-700 hover:bg-gray-100 hover:text-dark border border-transparent'
                         }`}
                         onClick={() => setIsSidebarOpen(false)}
                       >
-                        <span className={isActive ? 'text-primary' : 'text-gray-500'}>
-                          {link.icon}
-                        </span>
-                        {link.name}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={isActive ? 'text-primary' : 'text-gray-500'}>
+                            {link.icon}
+                          </span>
+                          <span className="truncate">{link.name}</span>
+                        </div>
+                        {link.badge !== undefined && link.badge > 0 && (
+                          <motion.span
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                            className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black leading-none text-white bg-red-600 rounded-full shadow-sm shrink-0"
+                            title={`${link.badge} unread items`}
+                          >
+                            {link.badge}
+                          </motion.span>
+                        )}
                       </Link>
                     );
                   })}

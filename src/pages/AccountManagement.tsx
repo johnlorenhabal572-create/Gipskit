@@ -180,7 +180,7 @@ export const AccountManagement = () => {
   }, [accounts]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Success Toast */}
@@ -201,19 +201,11 @@ export const AccountManagement = () => {
           )}
         </AnimatePresence>
 
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Users Account Management</h1>
-              <span className="bg-gray-200 text-dark font-bold text-xs px-2.5 py-0.5 rounded-full">
-                {stats.total} Total
-              </span>
-            </div>
-            <p className="text-gray-500 text-xs sm:text-sm mt-1">
-              View all registered customer accounts, administrative staff, statuses, and security activity.
-            </p>
-          </div>
+        {/* Page Header Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <span className="bg-gray-200 text-dark font-bold text-xs px-3 py-1 rounded-full">
+            {stats.total} Total Users
+          </span>
 
           <div className="flex items-center gap-2 w-full md:w-auto">
             <button 

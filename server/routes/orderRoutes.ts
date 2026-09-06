@@ -261,6 +261,10 @@ router.post('/', async (req: Request, res: Response) => {
       status: finalStatus,
       orderType: finalOrderType,
       paymentScreenshot: req.body.paymentScreenshot || '',
+      adminViewed: finalOrderType === 'POS' ? true : false,
+      adminViewedAt: finalOrderType === 'POS' ? new Date() : null,
+      customerViewedStatus: finalStatus,
+      customerLastViewedAt: new Date(),
       date: orderDate
     };
 
@@ -277,6 +281,10 @@ router.post('/', async (req: Request, res: Response) => {
             const prevQty = invItem.quantity;
             const newQty = Math.max(0, prevQty - qty);
             invItem.quantity = newQty;
+            const threshold = invItem.lowStockThreshold || 10;
+            if (newQty <= threshold && prevQty > threshold) {
+              invItem.lowStockAcknowledged = false;
+            }
             await invItem.save();
 
             // Log the order deduction
@@ -313,7 +321,12 @@ router.post('/', async (req: Request, res: Response) => {
       if (item.inventoryLinkId) {
         const invItem = memoryStore.inventory.find(i => i.id === item.inventoryLinkId);
         if (invItem) {
+          const prevQty = invItem.quantity;
           invItem.quantity = Math.max(0, invItem.quantity - qty);
+          const threshold = invItem.lowStockThreshold || 10;
+          if (invItem.quantity <= threshold && prevQty > threshold) {
+            invItem.lowStockAcknowledged = false;
+          }
           memoryStore.inventoryLogs.push({
             id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             inventoryItemId: item.inventoryLinkId,

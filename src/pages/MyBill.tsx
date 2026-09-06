@@ -1,12 +1,14 @@
 import { useState, useEffect, useContext } from 'react';
 import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
-import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag } from 'lucide-react';
+import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const MyBill = () => {
   const [bills, setBills] = useState<any[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<{ [key: string]: string }>({});
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
 
@@ -56,18 +58,26 @@ const MyBill = () => {
   };
 
   const handleConfirmOrder = async (orderId: string) => {
-    await modifyOrderStatus(orderId, 'Paid');
-    alert("Order confirmed! You can now track it in My Order.");
-    navigate('/my-orders');
+    if (processingPaymentId) return; // Prevent duplicate payment/order submissions
+    setProcessingPaymentId(orderId);
+    setPaymentError(prev => ({ ...prev, [orderId]: '' }));
+
+    try {
+      await modifyOrderStatus(orderId, 'Paid');
+      navigate('/my-orders');
+    } catch (err: any) {
+      console.error('Failed to confirm order payment:', err);
+      setPaymentError(prev => ({ 
+        ...prev, 
+        [orderId]: err?.message || 'Payment confirmation failed. Please try again.' 
+      }));
+    } finally {
+      setProcessingPaymentId(null);
+    }
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-8 sm:py-12">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">My Bill</h1>
-        <p className="text-xs text-gray-500 mt-1">Settle pending payments for your in-store pickup orders</p>
-      </div>
-
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-6 sm:py-8">
       {bills.length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
           <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
@@ -183,17 +193,31 @@ const MyBill = () => {
                     </div>
                     
                     <div className="mt-6 pt-4 border-t border-gray-100">
+                      {paymentError[bill.id] && (
+                        <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                          <AlertCircle size={15} className="shrink-0" />
+                          <span>{paymentError[bill.id]}</span>
+                        </div>
+                      )}
                       <button 
                         onClick={() => handleConfirmOrder(bill.id)}
-                        disabled={!bill.paymentScreenshot}
+                        disabled={!bill.paymentScreenshot || processingPaymentId === bill.id}
                         className={`
                           w-full py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2
-                          ${bill.paymentScreenshot 
-                            ? 'bg-dark text-white hover:bg-primary active:translate-y-0.5' 
+                          ${bill.paymentScreenshot && processingPaymentId !== bill.id
+                            ? 'bg-dark text-white hover:bg-primary active:translate-y-0.5 shadow-sm' 
                             : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'}
+                          ${processingPaymentId === bill.id ? 'opacity-70 cursor-not-allowed' : ''}
                         `}
                       >
-                        Confirm Payment
+                        {processingPaymentId === bill.id ? (
+                          <>
+                            <RefreshCw size={16} className="animate-spin" />
+                            <span>Processing Payment...</span>
+                          </>
+                        ) : (
+                          <span>Confirm Payment</span>
+                        )}
                       </button>
                       <p className="text-[10px] text-gray-400 font-medium text-center mt-2">Please double-check all details before confirming</p>
                     </div>

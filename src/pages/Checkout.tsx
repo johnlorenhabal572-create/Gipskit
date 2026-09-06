@@ -3,6 +3,7 @@ import { CartContext } from '../context/CartContext';
 import { createOrder } from '../api/orderService';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { RefreshCw } from 'lucide-react';
 
 const Checkout = () => {
   const { cart, getCartTotal, clearCart } = useContext(CartContext) as any;
@@ -65,12 +66,7 @@ const Checkout = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-xl py-8 sm:py-12">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Checkout</h1>
-        <p className="text-xs text-gray-500 mt-1">Review your items and confirm your pickup order</p>
-      </div>
-      
+    <div className="container mx-auto p-4 sm:p-6 max-w-xl py-6 sm:py-8">
       <div className="bg-white p-6 rounded-xl border border-gray-200 mb-6">
         <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">
           Order Summary
@@ -129,9 +125,16 @@ const Checkout = () => {
           <button 
             type="submit" 
             disabled={isSubmitting}
-            className="w-full bg-dark text-white py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-2 active:translate-y-0.5"
+            className="w-full bg-dark text-white py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-2 active:translate-y-0.5 disabled:opacity-50"
           >
-            {isSubmitting ? 'Placing Order...' : 'Confirm & Place Order'}
+            {isSubmitting ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                <span>Placing Order...</span>
+              </>
+            ) : (
+              <span>Confirm & Place Order</span>
+            )}
           </button>
           <p className="text-[11px] text-gray-500 font-medium text-center mt-3">Pay first via GCash in My Bill to confirm your order</p>
         </div>

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
-import { CreditCard, CheckCircle2, Eye, User, Phone, MapPin, Facebook, X, AlertCircle } from 'lucide-react';
+import { CreditCard, CheckCircle2, Eye, User, Phone, MapPin, Facebook, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 
 const CustomerPayment = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const loadOrders = async () => {
     try {
@@ -26,25 +28,25 @@ const CustomerPayment = () => {
   }, []);
 
   const handleConfirmPayment = async (orderId: string) => {
-    await modifyOrderStatus(orderId, 'Completed');
-    setSelectedOrder(null);
-    alert("Payment confirmed! Order moved to Transaction History.");
-    await loadOrders();
+    if (isProcessingPayment) return;
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+
+    try {
+      await modifyOrderStatus(orderId, 'Completed');
+      setSelectedOrder(null);
+      await loadOrders();
+    } catch (err: any) {
+      console.error('Failed to confirm payment:', err);
+      setPaymentError(err?.message || 'Failed to process payment confirmation.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-white p-6">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-dark text-white p-2.5 rounded-lg">
-            <CreditCard size={20} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-dark tracking-tight">Customer Payments</h1>
-            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Payment Verification & Confirmation</p>
-          </div>
-        </div>
-
         {orders.length === 0 ? (
           <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
             <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mx-auto mb-3">
@@ -186,18 +188,37 @@ const CustomerPayment = () => {
                   </div>
                 </div>
 
+                {paymentError && (
+                  <div className="mx-6 mb-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle size={15} className="shrink-0" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
+
                 <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-2">
                   <button 
                     onClick={() => setSelectedOrder(null)}
-                    className="flex-1 bg-white text-gray-700 py-2 rounded-lg font-bold border border-gray-300 hover:bg-gray-100 transition-colors text-xs uppercase tracking-wider"
+                    disabled={isProcessingPayment}
+                    className="flex-1 bg-white text-gray-700 py-2.5 rounded-lg font-bold border border-gray-300 hover:bg-gray-100 transition-colors text-xs uppercase tracking-wider disabled:opacity-50"
                   >
                     Close
                   </button>
                   <button 
                     onClick={() => handleConfirmPayment(selectedOrder.id)}
-                    className="flex-1 bg-dark text-white py-2 rounded-lg font-bold hover:bg-primary transition-colors flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider active:translate-y-0.5"
+                    disabled={isProcessingPayment}
+                    className="flex-1 bg-dark text-white py-2.5 rounded-lg font-bold hover:bg-primary transition-colors flex items-center justify-center gap-2 text-xs uppercase tracking-wider active:translate-y-0.5 disabled:opacity-60"
                   >
-                    <CheckCircle2 size={16} /> Confirm Payment & Complete
+                    {isProcessingPayment ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin" />
+                        <span>Processing Payment...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Confirm Payment & Complete</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

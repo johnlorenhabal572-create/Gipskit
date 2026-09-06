@@ -15,16 +15,34 @@ const LandingPage = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center">
+    <div className="relative min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center overflow-hidden">
+      {/* Subtle Inasal Background Hero Element */}
+      <div className="absolute inset-0 pointer-events-none select-none z-0">
+        <img 
+          src={IMAGES.INASAL_HERO} 
+          alt="Chicken Inasal Gip's Kitchen" 
+          className="w-full h-full object-cover object-center opacity-10 filter brightness-105 contrast-105"
+          referrerPolicy="no-referrer"
+        />
+        {/* Soft white vignette & gradient overlay for optimal text contrast and readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/85 to-white" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-50/40 via-transparent to-white/90" />
+      </div>
+
       {/* Hero Section */}
-      <section className="relative py-14 sm:py-20 px-4 sm:px-6">
+      <section className="relative z-10 py-14 sm:py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shadow-md border-2 border-gray-900 bg-dark mb-4 p-0.5">
-            <img src={IMAGES.LOGO} alt="Gip's Kitchen Logo" className="w-full h-full object-cover" />
+          <div className="w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-full overflow-hidden shadow-md border-2 border-dark/80 bg-dark mb-4 ring-4 ring-orange-200/50 flex items-center justify-center shrink-0">
+            <img 
+              src={IMAGES.LOGO} 
+              alt="Gip's Kitchen Logo" 
+              className="w-full h-full object-cover object-center scale-[1.18]" 
+            />
           </div>
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs font-bold text-gray-600 mb-6 uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/90 backdrop-blur-sm border border-orange-200/80 rounded-full text-xs font-bold text-dark/80 mb-6 uppercase tracking-wider shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
             <span>Official Gip's Kitchen Food & Drinks</span>
           </div>
 
@@ -33,21 +51,21 @@ const LandingPage = () => {
             <span className="text-primary">Chill Spot</span> in Bulan.
           </h1>
 
-          <p className="text-base sm:text-lg md:text-xl mb-10 max-w-2xl mx-auto text-gray-600 font-normal leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl mb-10 max-w-2xl mx-auto text-dark/75 font-medium leading-relaxed">
             Home of the best Sizzling Sisig and the coldest drinks. Order ahead online and pick up fresh and hot at your convenience.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto w-full">
             <Link 
               to="/menu" 
-              className="flex-1 bg-primary text-white hover:bg-primary/90 px-6 py-3.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-transparent active:translate-y-0.5"
+              className="flex-1 bg-primary text-white hover:bg-primary/90 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all border border-transparent shadow-sm hover:shadow active:translate-y-0.5"
             >
               <Utensils size={18} />
               <span>Browse Menu</span>
             </Link>
             <Link 
               to="/about" 
-              className="flex-1 bg-white border border-gray-300 text-dark hover:bg-gray-50 px-6 py-3.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors active:translate-y-0.5"
+              className="flex-1 bg-white border border-orange-200/80 text-dark hover:bg-orange-50/50 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-xs active:translate-y-0.5"
             >
               <span>About Pickup</span>
               <ArrowRight size={18} />

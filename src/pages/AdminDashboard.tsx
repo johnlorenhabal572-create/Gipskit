@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
+import { useNotifications } from '../context/NotificationContext';
 import { X, Eye, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -9,11 +10,21 @@ const AdminDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('Pending');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { markAdminOrdersAsRead } = useNotifications();
+  const hasMarkedReadRef = useRef(false);
 
   const loadOrders = async () => {
     try {
       const data = await fetchOrders();
-      setOrders(data || []);
+      const orderList = data || [];
+      setOrders(orderList);
+
+      // If there are unread orders and this page is visited, mark them as read
+      const hasUnread = orderList.some((o: any) => o.adminViewed === false || !o.adminViewed);
+      if (hasUnread && !hasMarkedReadRef.current) {
+        hasMarkedReadRef.current = true;
+        markAdminOrdersAsRead();
+      }
     } catch (err) {
       console.error('Failed to load orders in AdminDashboard:', err);
     } finally {
@@ -22,6 +33,7 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
+    hasMarkedReadRef.current = false;
     loadOrders();
     const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
@@ -60,14 +72,8 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Order Queue</h1>
-            <p className="text-xs text-gray-500 mt-1">Manage, verify payments, and process customer pickup orders</p>
-          </div>
-          
-          <div className="flex flex-wrap gap-1.5 w-full sm:w-auto">
-            {['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
+        <div className="flex flex-wrap gap-1.5 w-full mb-6">
+          {['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
@@ -80,7 +86,6 @@ const AdminDashboard = () => {
                 {status}
               </button>
             ))}
-          </div>
         </div>
         
         {/* Search Bar */}

@@ -28,17 +28,8 @@ const ReorderList = () => {
     }));
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-white p-6">
       <div className="max-w-5xl mx-auto space-y-6">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-dark tracking-tight">Reorder List</h1>
-            <p className="text-gray-500 text-xs sm:text-sm mt-0.5">Automated restock recommendations based on current vs stable quantity levels.</p>
-          </div>
-        </div>
-
         {/* Loading Spinner */}
         {isLoading && (
           <div className="flex items-center justify-center p-12">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   fetchInventory, 
   createInventoryItem, 
@@ -7,6 +7,7 @@ import {
   adjustInventoryStock,
   fetchInventoryLogs 
 } from '../api/inventoryService';
+import { useNotifications } from '../context/NotificationContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -47,6 +48,8 @@ const ManageInventory = () => {
   const [adjustReason, setAdjustReason] = useState<string>('');
 
   const UNIT_OPTIONS = ['pcs', 'kg', 'pack', 'bottle', 'can', 'box', 'liter', 'ml', 'g'];
+  const { acknowledgeLowStock } = useNotifications();
+  const hasAcknowledgedRef = useRef(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -55,8 +58,20 @@ const ManageInventory = () => {
         fetchInventory(),
         fetchInventoryLogs(undefined, 100)
       ]);
-      setInventory(Array.isArray(itemsData) ? itemsData : []);
+      const items = Array.isArray(itemsData) ? itemsData : [];
+      setInventory(items);
       setLogs(Array.isArray(logsData) ? logsData : []);
+
+      // Check if there are unacknowledged low-stock items being viewed
+      const hasUnacknowledgedLowStock = items.some(item => {
+        const threshold = item.lowStockThreshold !== undefined ? item.lowStockThreshold : 10;
+        return item.quantity <= threshold && item.lowStockAcknowledged !== true;
+      });
+
+      if (hasUnacknowledgedLowStock && !hasAcknowledgedRef.current) {
+        hasAcknowledgedRef.current = true;
+        acknowledgeLowStock();
+      }
     } catch (err: any) {
       console.error('Error loading inventory data:', err);
     } finally {
@@ -65,7 +80,10 @@ const ManageInventory = () => {
   };
 
   useEffect(() => {
+    hasAcknowledgedRef.current = false;
     loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleAdd = async () => {
@@ -186,7 +204,7 @@ const ManageInventory = () => {
   const lowStockCount = inventory.filter(item => item.quantity <= (item.lowStockThreshold || 10)).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-white p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header and Action Controls */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

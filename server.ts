@@ -9,6 +9,7 @@ import productRoutes from './server/routes/productRoutes';
 import inventoryRoutes from './server/routes/inventoryRoutes';
 import orderRoutes from './server/routes/orderRoutes';
 import categoryRoutes from './server/routes/categoryRoutes';
+import notificationRoutes from './server/routes/notificationRoutes';
 
 // Security Helper: Safe string extractor and sanitizer
 function sanitizeString(input: unknown, maxLength = 255): string {
@@ -628,6 +629,9 @@ async function startServer() {
   // 10. Orders & Sales REST API
   app.use('/api/orders', orderRoutes);
   app.use('/api/sales', orderRoutes);
+
+  // 11. Notifications REST API
+  app.use('/api/notifications', notificationRoutes);
 
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {

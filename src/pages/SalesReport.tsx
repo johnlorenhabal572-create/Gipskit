@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { fetchOrders, fetchProductAnalysis } from '../api/orderService';
 import { 
   Calendar, TrendingUp, ShoppingBag, DollarSign, ChevronLeft, ChevronRight,
-  BarChart2, Award, AlertCircle, Printer, RefreshCw, Layers
+  BarChart2, Award, AlertCircle, RefreshCw, Layers
 } from 'lucide-react';
 
 const SalesReport = () => {
@@ -121,25 +121,13 @@ const SalesReport = () => {
     return false;
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+    <div className="min-h-screen bg-white p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
+        {/* Header Controls */}
         <header className="space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-black text-dark tracking-tight">Sales & Analytics</h1>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider mt-0.5">
-                Performance & Revenue Breakdown
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Period Filter Buttons */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* Period Filter Buttons */}
               <div className="flex bg-white p-1 rounded-lg border border-gray-300">
                 {(['day', 'week', 'month', 'year'] as const).map((type) => (
                   <button
@@ -187,15 +175,7 @@ const SalesReport = () => {
               >
                 <RefreshCw size={15} />
               </button>
-              <button 
-                onClick={handlePrint}
-                className="px-3.5 py-2 bg-dark text-white text-xs font-bold rounded-lg flex items-center gap-1.5 hover:bg-primary transition-colors uppercase tracking-wider"
-              >
-                <Printer size={15} />
-                <span className="hidden sm:inline">Print</span>
-              </button>
             </div>
-          </div>
         </header>
 
         {/* Metric Cards */}

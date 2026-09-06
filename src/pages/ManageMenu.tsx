@@ -216,20 +216,15 @@ const ManageMenu = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-white p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-dark tracking-tight">Manage Menu</h1>
-            <p className="text-gray-500 text-xs sm:text-sm mt-0.5">Add, edit, or remove items from your customer and POS catalog.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button 
-              onClick={() => { setIsAddingCategory(true); setCategoryMsg(''); }}
-              className="bg-white text-dark border border-gray-300 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
-            >
-              <FolderPlus size={15} /> Add Category
-            </button>
+        <div className="flex justify-end items-center mb-6 gap-2">
+          <button 
+            onClick={() => { setIsAddingCategory(true); setCategoryMsg(''); }}
+            className="bg-white text-dark border border-gray-300 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
+          >
+            <FolderPlus size={15} /> Add Category
+          </button>
             <button 
               onClick={() => { setIsAdding(true); resetForm(); }}
               className="bg-dark text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-primary transition-colors active:translate-y-0.5"
@@ -237,7 +232,6 @@ const ManageMenu = () => {
               <Plus size={16} /> Add Menu Item
             </button>
           </div>
-        </div>
 
         {/* Add Category Modal */}
         <AnimatePresence>

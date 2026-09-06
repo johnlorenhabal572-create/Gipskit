@@ -84,12 +84,8 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 font-sans">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Overview & Analytics</h1>
-            <p className="text-xs text-gray-500 mt-1">Real-time performance summary and inventory levels</p>
-          </div>
-          <div className="flex items-center gap-2 self-start md:self-center">
+        <header className="mb-6 flex items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
               <button
                 onClick={() => setReportPeriod('daily')}

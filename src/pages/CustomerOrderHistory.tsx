@@ -1,6 +1,7 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { Search, Clock, X, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -9,6 +10,8 @@ const CustomerOrderHistory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const { user } = useContext(AuthContext) as any;
+  const { markCustomerOrdersRead } = useNotifications();
+  const hasMarkedReadRef = useRef(false);
 
   const loadOrders = async () => {
     try {
@@ -22,12 +25,20 @@ const CustomerOrderHistory = () => {
       
       userOrders.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
       setMyOrders(userOrders);
+
+      // When the customer opens Order History and the relevant new updates are displayed,
+      // mark those notifications as read and remove the badge.
+      if (userOrders.length > 0 && !hasMarkedReadRef.current) {
+        hasMarkedReadRef.current = true;
+        markCustomerOrdersRead(userOrders.map(o => o.id));
+      }
     } catch (err) {
       console.error('Failed to load customer orders:', err);
     }
   };
 
   useEffect(() => {
+    hasMarkedReadRef.current = false;
     loadOrders();
     const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
@@ -46,12 +57,7 @@ const CustomerOrderHistory = () => {
   );
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-8 sm:py-12">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight">Order History</h1>
-        <p className="text-xs text-gray-500 mt-1">Track and review past in-store pickup orders</p>
-      </div>
-      
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-6 sm:py-8">
       {/* Search Box */}
       {myOrders.length > 0 && (
         <div className="relative mb-6">

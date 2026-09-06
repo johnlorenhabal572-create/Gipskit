@@ -10,6 +10,7 @@ export const IMAGES = {
   
   // Landing Page
   HERO_BG: '/images/FB_IMG_1776126830971.jpg', // Place your hero-bg.jpg in public/images/
+  INASAL_HERO: '/images/inasal_hero.jpg', // Inasal hero backdrop
   INNOVATION_IMG: '/images/Screenshot 2026-04-14 112014.png', // Place your innovation.jpg in public/images/
   
   // Gallery (Place these in public/images/)

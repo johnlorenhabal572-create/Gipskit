@@ -51,11 +51,8 @@ const Catalog = () => {
   });
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 py-8 sm:py-12 max-w-7xl">
-      <div className="mb-8 max-w-3xl mx-auto text-center">
-        <h1 className="text-2xl sm:text-3xl font-black text-dark tracking-tight mb-2">Our Menu</h1>
-        <p className="text-gray-500 text-xs sm:text-sm mb-6">Choose your favorites for quick and convenient pickup</p>
-
+    <div className="container mx-auto p-4 sm:p-6 py-6 sm:py-8 max-w-7xl">
+      <div className="mb-8 max-w-3xl mx-auto">
         {/* Search Bar */}
         <div className="relative mb-6 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" size={18} />
