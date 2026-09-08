@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { useNotifications } from '../context/NotificationContext';
-import { X, Eye, RefreshCw } from 'lucide-react';
+import { X, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const AdminDashboard = () => {
@@ -50,9 +50,13 @@ const AdminDashboard = () => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       order.id.toLowerCase().includes(searchLower) || 
-      order.customer.name.toLowerCase().includes(searchLower);
+      order.customer.name.toLowerCase().includes(searchLower) ||
+      (order.customer.email && order.customer.email.toLowerCase().includes(searchLower)) ||
+      (order.customer.phone && order.customer.phone.toLowerCase().includes(searchLower));
       
-    const matchesStatus = filterStatus === 'All' || order.status === filterStatus;
+    const matchesStatus = filterStatus === 'All' 
+      || order.status === filterStatus
+      || (filterStatus === 'Ready for Pickup' && order.status === 'Ready to Pickup');
     
     return matchesSearch && matchesStatus;
   });
@@ -62,6 +66,8 @@ const AdminDashboard = () => {
       case 'Pending': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
       case 'Paid': return 'bg-blue-50 text-blue-800 border-blue-200';
       case 'Processing': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      case 'Cooking': return 'bg-orange-50 text-orange-800 border-orange-200';
+      case 'Ready for Pickup':
       case 'Ready to Pickup': return 'bg-purple-50 text-purple-800 border-purple-200';
       case 'Completed': return 'bg-green-50 text-green-800 border-green-200';
       case 'Cancelled': return 'bg-red-50 text-red-800 border-red-200';
@@ -69,11 +75,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const getCustomerInitials = (customerName?: string, status: string = ''): string => {
+    const name = customerName?.trim();
+    if (!name) {
+      return status === 'Cooking' ? '🍳' : (status.charAt(0) || 'C');
+    }
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return status === 'Cooking' ? '🍳' : (status.charAt(0) || 'C');
+    }
+    return parts.map(p => p.charAt(0).toUpperCase()).join('');
+  };
+
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-wrap gap-1.5 w-full mb-6">
-          {['Pending', 'Paid', 'Processing', 'Ready to Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
+          {['Pending', 'Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
@@ -83,7 +101,7 @@ const AdminDashboard = () => {
                     : 'bg-white text-gray-600 border-gray-200 hover:border-dark hover:text-dark'
                 }`}
               >
-                {status}
+                {status === 'Cooking' ? 'Cooking 🍳' : status}
               </button>
             ))}
         </div>
@@ -120,13 +138,13 @@ const AdminDashboard = () => {
                 <div key={order.id} className="bg-white p-5 sm:p-6 rounded-xl border border-gray-200 flex flex-col xl:flex-row xl:items-stretch gap-6 hover:border-gray-300 transition-colors">
                   <div className="flex gap-4 items-start flex-1">
                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 border font-black text-lg ${getStatusColor(order.status)}`}>
-                      {order.status.charAt(0)}
+                      {getCustomerInitials(order.customer?.name || order.userName, order.status)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="text-lg font-black text-dark tracking-tight">{order.customer?.name || 'Customer'}</h3>
                         <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
-                          {order.status}
+                          {order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status)}
                         </span>
                       </div>
                       
@@ -220,13 +238,22 @@ const AdminDashboard = () => {
                       )}
                       {order.status === 'Processing' && (
                         <button 
-                          onClick={() => handleStatusChange(order.id, 'Ready to Pickup')}
-                          className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors text-center"
+                          onClick={() => handleStatusChange(order.id, 'Cooking')}
+                          className="bg-orange-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-orange-700 transition-colors text-center flex items-center justify-center gap-1.5"
                         >
-                          Ready to Pickup
+                          <span>Move to Cooking</span>
+                          <span>🍳</span>
                         </button>
                       )}
-                      {order.status === 'Ready to Pickup' && (
+                      {order.status === 'Cooking' && (
+                        <button 
+                          onClick={() => handleStatusChange(order.id, 'Ready for Pickup')}
+                          className="bg-purple-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-700 transition-colors text-center"
+                        >
+                          Ready for Pickup
+                        </button>
+                      )}
+                      {(order.status === 'Ready for Pickup' || order.status === 'Ready to Pickup') && (
                         <button 
                           onClick={() => handleStatusChange(order.id, 'Completed')}
                           className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-green-700 transition-colors text-center"

@@ -202,12 +202,8 @@ export const AccountManagement = () => {
         </AnimatePresence>
 
         {/* Page Header Actions */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <span className="bg-gray-200 text-dark font-bold text-xs px-3 py-1 rounded-full">
-            {stats.total} Total Users
-          </span>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex justify-end items-center gap-4">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
             <button 
               onClick={() => fetchUsers && fetchUsers()} 
               disabled={loadingUsers}

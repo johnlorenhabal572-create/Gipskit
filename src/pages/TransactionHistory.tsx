@@ -37,7 +37,9 @@ const TransactionHistory = () => {
     const matchesSearch = 
       order.id.toLowerCase().includes(searchLower) || 
       order.customer.name.toLowerCase().includes(searchLower);
-    const matchesStatus = filterStatus === 'All' || order.status === filterStatus;
+    const matchesStatus = filterStatus === 'All' 
+      || order.status === filterStatus
+      || (filterStatus === 'Ready for Pickup' && order.status === 'Ready to Pickup');
     return matchesSearch && matchesStatus;
   });
 
@@ -64,7 +66,10 @@ const TransactionHistory = () => {
           >
             <option value="All">All Statuses</option>
             <option value="Pending">Pending</option>
+            <option value="Paid">Paid</option>
             <option value="Processing">Processing</option>
+            <option value="Cooking">Cooking</option>
+            <option value="Ready for Pickup">Ready for Pickup</option>
             <option value="On Delivery">On Delivery</option>
             <option value="Completed">Completed</option>
             <option value="Cancelled">Cancelled</option>
@@ -90,11 +95,13 @@ const TransactionHistory = () => {
                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
                         order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                         order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                        order.status === 'On Delivery' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                        order.status === 'Cooking' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                         order.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        (order.status === 'Ready for Pickup' || order.status === 'Ready to Pickup') ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                        order.status === 'On Delivery' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                         'bg-amber-50 text-amber-700 border-amber-200'
                       }`}>
-                        {order.status}
+                        {order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status)}
                       </span>
                     </div>
                     <h4 className="font-bold text-sm text-dark">{order.customer.name}</h4>
@@ -190,9 +197,13 @@ const TransactionHistory = () => {
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Status</p>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                         selectedOrder.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                        selectedOrder.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                        selectedOrder.status === 'Cooking' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                        selectedOrder.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        (selectedOrder.status === 'Ready for Pickup' || selectedOrder.status === 'Ready to Pickup') ? 'bg-purple-50 text-purple-700 border-purple-200' :
                         'bg-gray-100 text-gray-700 border-gray-200'
                       }`}>
-                        {selectedOrder.status}
+                        {selectedOrder.status === 'Cooking' ? 'Cooking 🍳' : (selectedOrder.status === 'Ready to Pickup' ? 'Ready for Pickup' : selectedOrder.status)}
                       </span>
                     </div>
                     <div className="text-right">

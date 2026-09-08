@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { connectMongoose, getDbStatus, memoryStore, mongoose } from './server/db';
 import { User, VerificationCode, Order } from './server/models';
@@ -40,6 +41,38 @@ function validatePassword(password: string): { isValid: boolean; error?: string 
   return { isValid: true };
 }
 
+// Password Hashing: Secure salted scrypt hash
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+// Password Verification: Supports newly hashed passwords, SHA-256, and legacy plain text
+function verifyPassword(inputPassword: string, storedPassword?: string): boolean {
+  if (!storedPassword) return false;
+  // 1. Direct plaintext match (for legacy accounts or default seed like 'Admin123')
+  if (storedPassword === inputPassword) return true;
+  // 2. SHA-256 check
+  try {
+    const sha = crypto.createHash('sha256').update(inputPassword).digest('hex');
+    if (storedPassword === sha) return true;
+  } catch {}
+  // 3. Salted scrypt match (salt:hash)
+  if (storedPassword.includes(':')) {
+    try {
+      const [salt, key] = storedPassword.split(':');
+      if (salt && key) {
+        const computed = crypto.scryptSync(inputPassword, salt, 64).toString('hex');
+        if (key.length === computed.length && crypto.timingSafeEqual(Buffer.from(key, 'hex'), Buffer.from(computed, 'hex'))) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+  return false;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -64,7 +97,46 @@ async function startServer() {
     });
   });
 
-  // 2. Send 6-Digit Verification Code to Gmail
+  // 2. Check if Account Exists (for Forgot Password verification)
+  app.post('/api/auth/check-account', async (req, res) => {
+    try {
+      const email = sanitizeString(req.body.email).toLowerCase();
+
+      if (!email) {
+        return res.status(400).json({ error: 'Please enter your Gmail address.' });
+      }
+
+      if (!isGmailAddress(email)) {
+        return res.status(400).json({ error: 'Please enter a valid Gmail address ending in @gmail.com' });
+      }
+
+      const { isConnected } = await getDbStatus();
+      let existingUser = null;
+
+      if (isConnected) {
+        existingUser = await User.findOne({ email });
+      } else {
+        existingUser = memoryStore.users.find(u => u.email === email);
+      }
+
+      if (!existingUser) {
+        return res.status(404).json({ 
+          exists: false,
+          error: 'No account was found with this Gmail address.' 
+        });
+      }
+
+      return res.json({
+        exists: true,
+        email
+      });
+    } catch (error) {
+      console.error('Error in check-account:', error);
+      res.status(500).json({ error: 'Failed to verify account.' });
+    }
+  });
+
+  // 3. Send 6-Digit Verification Code to Gmail
   app.post('/api/auth/send-code', async (req, res) => {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
@@ -75,12 +147,12 @@ async function startServer() {
       }
 
       if (!isGmailAddress(email)) {
-        return res.status(400).json({ error: 'Sign up requires a valid Gmail account ending in @gmail.com' });
+        return res.status(400).json({ error: 'Requires a valid Gmail account ending in @gmail.com' });
       }
 
       const { isConnected } = await getDbStatus();
 
-      // Check if user already exists when signing up
+      // Check user existence based on purpose
       if (purpose === 'signup') {
         let existingUser = null;
         if (isConnected) {
@@ -92,6 +164,19 @@ async function startServer() {
         if (existingUser) {
           return res.status(400).json({ 
             error: 'An account with this Gmail address already exists. Please Sign In instead.' 
+          });
+        }
+      } else if (purpose === 'reset' || purpose === 'forgot-password') {
+        let existingUser = null;
+        if (isConnected) {
+          existingUser = await User.findOne({ email });
+        } else {
+          existingUser = memoryStore.users.find(u => u.email === email);
+        }
+
+        if (!existingUser) {
+          return res.status(404).json({ 
+            error: 'No account was found with this Gmail address.' 
           });
         }
       }
@@ -118,7 +203,7 @@ async function startServer() {
       }
 
       // Dispatch verification code via Brevo HTTPS Transactional Email API
-      const result = await sendVerificationEmail(email, code);
+      const result = await sendVerificationEmail(email, code, purpose);
 
       if (!result.sent) {
         return res.status(500).json({
@@ -137,7 +222,7 @@ async function startServer() {
     }
   });
 
-  // 3. Verify the 6-Digit Code
+  // 4. Verify the 6-Digit Code
   app.post('/api/auth/verify-code', async (req, res) => {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
@@ -254,7 +339,7 @@ async function startServer() {
           id: newUserId,
           email,
           name,
-          password,
+          password: hashPassword(password),
           role: 'customer',
           status: 'Active',
           createdAt: now,
@@ -271,7 +356,7 @@ async function startServer() {
           id: newUserId,
           email,
           name,
-          password,
+          password: hashPassword(password),
           role: 'customer',
           status: 'Active',
           createdAt: now.toISOString(),
@@ -321,8 +406,8 @@ async function startServer() {
         matchedUser = memoryStore.users.find(u => u.email === email);
       }
 
-      // Check password
-      if (!matchedUser || matchedUser.password !== password) {
+      // Check password (supports hashed passwords as well as legacy plaintext)
+      if (!matchedUser || !verifyPassword(password, matchedUser.password)) {
         return res.status(401).json({ error: 'Invalid Gmail address or password. Please try again.' });
       }
 
@@ -385,6 +470,106 @@ async function startServer() {
     } catch (error) {
       console.error('Error in login:', error);
       res.status(500).json({ error: 'Failed to sign in.' });
+    }
+  });
+
+  // 6. Reset Password with Verified 6-Digit Code
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const email = sanitizeString(req.body.email).toLowerCase();
+      const password = sanitizeString(req.body.password, 64);
+
+      if (!email || !isGmailAddress(email)) {
+        return res.status(400).json({ error: 'A valid Gmail address (@gmail.com) is required.' });
+      }
+
+      // Strict Password Validation: Exact same rules as Sign-Up
+      const pwdCheck = validatePassword(password);
+      if (!pwdCheck.isValid) {
+        return res.status(400).json({ error: pwdCheck.error });
+      }
+
+      const { isConnected } = await getDbStatus();
+
+      // Verify that code was verified
+      let isVerified = false;
+      if (isConnected) {
+        const codeRecord = await VerificationCode.findOne({
+          email,
+          verified: true
+        });
+        if (codeRecord) {
+          isVerified = true;
+          await VerificationCode.deleteMany({ email });
+        }
+      } else {
+        const record = memoryStore.codes.get(email);
+        if (record && record.verified) {
+          isVerified = true;
+          memoryStore.codes.delete(email);
+        }
+      }
+
+      if (!isVerified) {
+        return res.status(400).json({ 
+          error: 'Verification code has not been verified. Please complete verification first.' 
+        });
+      }
+
+      // Find the existing customer account
+      let existingUser: any = null;
+      if (isConnected) {
+        existingUser = await User.findOne({ email });
+      } else {
+        existingUser = memoryStore.users.find(u => u.email === email);
+      }
+
+      if (!existingUser) {
+        return res.status(404).json({ error: 'No account was found with this Gmail address.' });
+      }
+
+      // Hash the new password
+      const hashedPassword = hashPassword(password);
+      const now = new Date();
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
+      const userAgent = req.headers['user-agent'] || 'Web Browser';
+
+      const resetActivity = {
+        timestamp: now,
+        ip: clientIp,
+        userAgent,
+        action: 'Password Reset via Verification Code'
+      };
+
+      if (isConnected && existingUser.save) {
+        existingUser.password = hashedPassword;
+        if (!existingUser.loginHistory) existingUser.loginHistory = [];
+        existingUser.loginHistory.unshift(resetActivity);
+        if (existingUser.loginHistory.length > 20) {
+          existingUser.loginHistory = existingUser.loginHistory.slice(0, 20);
+        }
+        await existingUser.save();
+      } else if (existingUser) {
+        existingUser.password = hashedPassword;
+        if (!existingUser.loginHistory) existingUser.loginHistory = [];
+        existingUser.loginHistory.unshift({
+          timestamp: now.toISOString(),
+          ip: clientIp,
+          userAgent,
+          action: 'Password Reset via Verification Code'
+        });
+        if (existingUser.loginHistory.length > 20) {
+          existingUser.loginHistory = existingUser.loginHistory.slice(0, 20);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: 'Your password has been successfully changed.'
+      });
+    } catch (error) {
+      console.error('Error in reset-password:', error);
+      res.status(500).json({ error: 'Failed to reset password.' });
     }
   });
 

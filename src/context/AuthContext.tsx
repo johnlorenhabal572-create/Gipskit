@@ -110,6 +110,115 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [accounts]);
 
+  // Check whether an account exists with the given Gmail (for Forgot Password)
+  const checkAccountExists = useCallback(async (email: string): Promise<{ exists: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const res = await fetch('/api/auth/check-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const localFound = accounts.find(
+          (a: any) => a.email && a.email.toLowerCase() === cleanEmail
+        );
+        if (localFound) {
+          return { exists: true };
+        }
+        return { exists: false, error: data.error || 'No account was found with this Gmail address.' };
+      }
+      return { exists: true };
+    } catch {
+      const localFound = accounts.find(
+        (a: any) => a.email && a.email.toLowerCase() === cleanEmail
+      );
+      if (localFound) {
+        return { exists: true };
+      }
+      return { exists: false, error: 'No account was found with this Gmail address.' };
+    }
+  }, [accounts]);
+
+  // Request 6-digit verification code for password reset
+  const sendResetCode = useCallback(async (email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Verify account exists before requesting code
+    const accountCheck = await checkAccountExists(cleanEmail);
+    if (!accountCheck.exists) {
+      throw new Error(accountCheck.error || 'No account was found with this Gmail address.');
+    }
+
+    try {
+      const res = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, purpose: 'reset' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send verification code');
+      }
+      return data;
+    } catch (err: any) {
+      throw new Error(err.message || 'Network error sending verification code');
+    }
+  }, [checkAccountExists]);
+
+  // Verify 6-digit code for password reset
+  const verifyResetCode = useCallback(async (email: string, code: string) => {
+    try {
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: code.trim()
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid or expired verification code');
+      }
+      return data;
+    } catch (err: any) {
+      throw new Error(err.message || 'Verification error');
+    }
+  }, []);
+
+  // Complete password reset
+  const resetPassword = useCallback(async (email: string, password: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: password.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to reset password');
+      }
+
+      // Update local accounts state
+      setAccounts(prev => prev.map(acc => {
+        if (acc.email && acc.email.toLowerCase() === cleanEmail) {
+          return { ...acc, password: password.trim() };
+        }
+        return acc;
+      }));
+
+      return data;
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to reset password');
+    }
+  }, []);
+
   // Verify 6-digit code for Gmail
   const verifySignUpCode = useCallback(async (email: string, code: string) => {
     try {
@@ -299,6 +408,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     sendSignUpCode,
     verifySignUpCode,
     completeSignUp,
+    checkAccountExists,
+    sendResetCode,
+    verifyResetCode,
+    resetPassword,
     logout, 
     accounts,
     loadingUsers,
@@ -314,6 +427,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     sendSignUpCode, 
     verifySignUpCode, 
     completeSignUp, 
+    checkAccountExists,
+    sendResetCode,
+    verifyResetCode,
+    resetPassword,
     logout, 
     accounts, 
     loadingUsers,

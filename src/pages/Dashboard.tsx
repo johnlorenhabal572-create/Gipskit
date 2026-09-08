@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, 
   Cell 
 } from 'recharts';
-import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, RefreshCw } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package } from 'lucide-react';
 
 const Dashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -19,8 +19,10 @@ const Dashboard = () => {
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'all'>('daily');
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoading(true);
+    }
     try {
       const [ordersData, inventoryData] = await Promise.all([
         fetchOrders(),
@@ -31,12 +33,18 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const today = new Date().toDateString();
@@ -52,7 +60,7 @@ const Dashboard = () => {
   
   const lifetimeSales = completedOrders.reduce((sum, o) => sum + o.total, 0);
   
-  const readyToPickupOrders = orders.filter(o => o.status === 'Ready to Pickup').length;
+  const readyToPickupOrders = orders.filter(o => o.status === 'Ready to Pickup' || o.status === 'Ready for Pickup').length;
   const lowStockCount = inventory.filter(item => item.quantity <= (item.lowStockThreshold || 10)).length;
 
   // Prepare Inventory Data for Chart
@@ -84,36 +92,27 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 font-sans">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-6 flex items-center justify-end gap-2">
-          <div className="flex items-center gap-2">
-            <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-              <button
-                onClick={() => setReportPeriod('daily')}
-                className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
-                  reportPeriod === 'daily' 
-                    ? 'bg-white text-dark border border-gray-200' 
-                    : 'text-gray-500 hover:text-dark'
-                }`}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => setReportPeriod('all')}
-                className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
-                  reportPeriod === 'all' 
-                    ? 'bg-white text-dark border border-gray-200' 
-                    : 'text-gray-500 hover:text-dark'
-                }`}
-              >
-                All-Time
-              </button>
-            </div>
+        <header className="mb-6 flex items-center justify-end">
+          <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
             <button
-              onClick={loadData}
-              className="p-2 bg-white border border-gray-200 text-gray-600 hover:text-dark rounded-lg transition-colors"
-              title="Refresh Dashboard"
+              onClick={() => setReportPeriod('daily')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
+                reportPeriod === 'daily' 
+                  ? 'bg-white text-dark border border-gray-200' 
+                  : 'text-gray-500 hover:text-dark'
+              }`}
             >
-              <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
+              Today
+            </button>
+            <button
+              onClick={() => setReportPeriod('all')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
+                reportPeriod === 'all' 
+                  ? 'bg-white text-dark border border-gray-200' 
+                  : 'text-gray-500 hover:text-dark'
+              }`}
+            >
+              All-Time
             </button>
           </div>
         </header>

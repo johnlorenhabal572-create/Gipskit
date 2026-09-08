@@ -97,11 +97,12 @@ const CustomerOrderHistory = () => {
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                       order.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
                       order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                      order.status === 'Cooking' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                       order.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      order.status === 'Ready to Pickup' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                      (order.status === 'Ready for Pickup' || order.status === 'Ready to Pickup') ? 'bg-purple-50 text-purple-700 border-purple-200' :
                       'bg-yellow-50 text-yellow-700 border-yellow-200'
                     }`}>
-                      {order.status}
+                      {order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status)}
                     </span>
                   </div>
                   <h4 className="font-black text-base text-dark">₱{order.total}</h4>
@@ -171,14 +172,64 @@ const CustomerOrderHistory = () => {
                   ))}
                 </div>
                 
+                {selectedOrder.status !== 'Cancelled' && (
+                  <div className="bg-gray-50/80 p-3.5 rounded-lg border border-gray-200">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Order Preparation Progress</p>
+                    <div className="grid grid-cols-4 gap-1.5 text-center">
+                      <div className={`p-2 rounded-lg border text-[11px] font-bold transition-all ${
+                        ['Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup', 'Completed'].includes(selectedOrder.status)
+                          ? selectedOrder.status === 'Processing'
+                            ? 'bg-blue-50 text-blue-800 border-blue-300 ring-2 ring-blue-200'
+                            : 'bg-white text-gray-700 border-gray-200'
+                          : 'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}>
+                        <span className="block text-[9px] uppercase font-bold text-gray-400">Step 1</span>
+                        <span>Processing</span>
+                      </div>
+                      <div className={`p-2 rounded-lg border text-[11px] font-bold transition-all ${
+                        ['Cooking', 'Ready for Pickup', 'Ready to Pickup', 'Completed'].includes(selectedOrder.status)
+                          ? selectedOrder.status === 'Cooking'
+                            ? 'bg-orange-50 text-orange-800 border-orange-300 ring-2 ring-orange-200 animate-pulse'
+                            : 'bg-white text-gray-700 border-gray-200'
+                          : 'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}>
+                        <span className="block text-[9px] uppercase font-bold text-gray-400">Step 2</span>
+                        <span>Cooking 🍳</span>
+                      </div>
+                      <div className={`p-2 rounded-lg border text-[11px] font-bold transition-all ${
+                        ['Ready for Pickup', 'Ready to Pickup', 'Completed'].includes(selectedOrder.status)
+                          ? (selectedOrder.status === 'Ready for Pickup' || selectedOrder.status === 'Ready to Pickup')
+                            ? 'bg-purple-50 text-purple-800 border-purple-300 ring-2 ring-purple-200'
+                            : 'bg-white text-gray-700 border-gray-200'
+                          : 'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}>
+                        <span className="block text-[9px] uppercase font-bold text-gray-400">Step 3</span>
+                        <span>Ready</span>
+                      </div>
+                      <div className={`p-2 rounded-lg border text-[11px] font-bold transition-all ${
+                        selectedOrder.status === 'Completed'
+                          ? 'bg-green-50 text-green-800 border-green-300 ring-2 ring-green-200'
+                          : 'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}>
+                        <span className="block text-[9px] uppercase font-bold text-gray-400">Step 4</span>
+                        <span>Completed</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="pt-4 border-t border-gray-200 flex justify-between items-end">
                    <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                       selectedOrder.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                      selectedOrder.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                      selectedOrder.status === 'Cooking' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                      selectedOrder.status === 'Processing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      (selectedOrder.status === 'Ready for Pickup' || selectedOrder.status === 'Ready to Pickup') ? 'bg-purple-50 text-purple-700 border-purple-200' :
                       'bg-primary/10 text-primary border-primary/20'
                     }`}>
-                      {selectedOrder.status}
+                      {selectedOrder.status === 'Cooking' ? 'Cooking 🍳' : (selectedOrder.status === 'Ready to Pickup' ? 'Ready for Pickup' : selectedOrder.status)}
                     </span>
                   </div>
                   <div className="text-right">

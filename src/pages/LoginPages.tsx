@@ -6,6 +6,7 @@ import {
   Mail, 
   Lock, 
   ArrowRight, 
+  ArrowLeft,
   RefreshCw, 
   CheckCircle2, 
   AlertCircle, 
@@ -20,13 +21,26 @@ import {
 } from 'lucide-react';
 
 const LoginPage = () => {
-  // Main Tab: 'signin' or 'signup'
-  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+  // Main Tab: 'signin' | 'signup' | 'forgot'
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'forgot'>('signin');
 
   // Sign In Form State
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [showSignInPassword, setShowSignInPassword] = useState(false);
+
+  // Forgot Password Multi-Step State
+  // Step 1 = Enter Gmail
+  // Step 2 = Enter 6-digit Verification Code
+  // Step 3 = Create New Password (8 chars, 1 uppercase, 1 number)
+  // Step 4 = Success Confirmation View
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3 | 4>(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtpCode, setForgotOtpCode] = useState(['', '', '', '', '', '']);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const forgotOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Sign Up Multi-step State
   // Step 1 = Enter Full Name & Gmail + Privacy Policy Check
@@ -48,7 +62,16 @@ const LoginPage = () => {
   const [infoMsg, setInfoMsg] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { login, sendSignUpCode, verifySignUpCode, completeSignUp } = useContext(AuthContext) as any;
+  const { 
+    login, 
+    sendSignUpCode, 
+    verifySignUpCode, 
+    completeSignUp,
+    checkAccountExists,
+    sendResetCode,
+    verifyResetCode,
+    resetPassword
+  } = useContext(AuthContext) as any;
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || null;
@@ -78,7 +101,7 @@ const LoginPage = () => {
     return /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
   };
 
-  // Password Rules Validation:
+  // Password Rules Validation (Sign Up):
   // 1. Total length exactly 8 characters
   // 2. Contains at least 1 uppercase letter
   // 3. Contains at least 1 number
@@ -93,6 +116,165 @@ const LoginPage = () => {
     passwordRules.exactEightChars && 
     passwordRules.hasUppercase && 
     passwordRules.hasNumber;
+
+  // Password Rules Validation (Password Reset):
+  const resetPasswordRules = {
+    exactEightChars: newPassword.length === 8,
+    hasUppercase: /[A-Z]/.test(newPassword),
+    hasNumber: /[0-9]/.test(newPassword),
+    passwordsMatch: newPassword.length > 0 && newPassword === confirmNewPassword
+  };
+
+  const isResetPasswordFullyValid = 
+    resetPasswordRules.exactEightChars && 
+    resetPasswordRules.hasUppercase && 
+    resetPasswordRules.hasNumber;
+
+  // -------------------------------------------------------------
+  // FORGOT PASSWORD HANDLERS
+  // -------------------------------------------------------------
+  const handleStartForgotPassword = () => {
+    setActiveTab('forgot');
+    setForgotStep(1);
+    if (signInEmail.trim()) {
+      setForgotEmail(signInEmail.trim());
+    }
+    setForgotOtpCode(['', '', '', '', '', '']);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setError('');
+    setInfoMsg('');
+  };
+
+  const handleSendResetVerificationCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError('');
+    setInfoMsg('');
+
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please enter your Gmail address.');
+      return;
+    }
+
+    if (!isGmailValid(cleanEmail)) {
+      setError('Please enter a valid Gmail address ending in @gmail.com');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Step 2: Verify that the account exists
+      const check = await checkAccountExists(cleanEmail);
+      if (!check.exists) {
+        setError(check.error || 'No account was found with this Gmail address.');
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Send verification code via Brevo
+      const res = await sendResetCode(cleanEmail);
+      setForgotStep(2);
+      setResendCooldown(60);
+      setInfoMsg(res.message || `A 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox.`);
+      setTimeout(() => {
+        forgotOtpInputRefs.current[0]?.focus();
+      }, 100);
+    } catch (err: any) {
+      setError(err.message || 'No account was found with this Gmail address.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotOtpChange = (index: number, value: string) => {
+    if (value.length > 1) {
+      const digits = value.replace(/\D/g, '').slice(0, 6).split('');
+      const newOtp = [...forgotOtpCode];
+      digits.forEach((d, i) => {
+        if (index + i < 6) newOtp[index + i] = d;
+      });
+      setForgotOtpCode(newOtp);
+      const nextIndex = Math.min(index + digits.length, 5);
+      forgotOtpInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    const digit = value.replace(/\D/g, '');
+    const newOtp = [...forgotOtpCode];
+    newOtp[index] = digit;
+    setForgotOtpCode(newOtp);
+
+    if (digit && index < 5) {
+      forgotOtpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleForgotOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !forgotOtpCode[index] && index > 0) {
+      forgotOtpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Step 4: Verify the code
+  const handleVerifyResetCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError('');
+    setInfoMsg('');
+
+    const fullCode = forgotOtpCode.join('').trim();
+    if (fullCode.length !== 6) {
+      setError('Please enter all 6 digits of the verification code.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await verifyResetCode(forgotEmail, fullCode);
+      setInfoMsg('Code verified! You can now create your new password.');
+      setForgotStep(3);
+    } catch (err: any) {
+      setError(err.message || 'Invalid or expired verification code. Please check and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 5 & 6: Create New Password & Update Existing Account
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfoMsg('');
+
+    if (!isResetPasswordFullyValid) {
+      setError('Password must have 1 capital letter, a number, and exactly 8 characters total.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await resetPassword(forgotEmail, newPassword);
+      setForgotStep(4);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 7: Back to Sign In
+  const handleBackToSignInAfterReset = () => {
+    setActiveTab('signin');
+    setSignInEmail(forgotEmail);
+    setSignInPassword('');
+    setError('');
+    setInfoMsg('Your password has been successfully changed. Please sign in with your new password.');
+  };
 
   // -------------------------------------------------------------
   // SIGN IN HANDLER
@@ -397,6 +579,17 @@ const LoginPage = () => {
                       tabIndex={-1}
                     >
                       {showSignInPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {/* Forgot Password Link directly below the Password field */}
+                  <div className="flex justify-end pt-1">
+                    <button 
+                      type="button"
+                      id="forgot-password-link"
+                      onClick={handleStartForgotPassword}
+                      className="text-primary hover:text-orange-700 underline text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Forgot Password?
                     </button>
                   </div>
                 </div>
@@ -758,6 +951,334 @@ const LoginPage = () => {
                   </button>
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* FORGOT PASSWORD FLOW */}
+          {/* ================================================================= */}
+          {activeTab === 'forgot' && (
+            <div>
+              {/* Back to Sign In Link */}
+              {forgotStep !== 4 && (
+                <button
+                  type="button"
+                  id="forgot-back-to-signin-top"
+                  onClick={() => { setActiveTab('signin'); setError(''); setInfoMsg(''); }}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-dark mb-4 transition-colors group"
+                >
+                  <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Back to Sign In</span>
+                </button>
+              )}
+
+              {/* Progress Indicator for Forgot Password */}
+              {forgotStep !== 4 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between relative mb-2">
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-gray-200 w-full -z-0"></div>
+                    <div 
+                      className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-primary transition-all duration-300 -z-0"
+                      style={{ width: forgotStep === 1 ? '0%' : forgotStep === 2 ? '50%' : '100%' }}
+                    ></div>
+
+                    {/* Step 1 Pill */}
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                      forgotStep >= 1 ? 'bg-dark text-white' : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      1
+                    </div>
+
+                    {/* Step 2 Pill */}
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                      forgotStep >= 2 ? 'bg-dark text-white' : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      2
+                    </div>
+
+                    {/* Step 3 Pill */}
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-colors ${
+                      forgotStep >= 3 ? 'bg-dark text-white' : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      3
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-gray-400 px-0.5">
+                    <span className={forgotStep === 1 ? 'text-primary' : ''}>1. Enter Gmail</span>
+                    <span className={forgotStep === 2 ? 'text-primary' : ''}>2. Verify Code</span>
+                    <span className={forgotStep === 3 ? 'text-primary' : ''}>3. New Password</span>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 1: Enter Gmail */}
+              {forgotStep === 1 && (
+                <div>
+                  <div className="flex flex-col items-center text-center mb-6">
+                    <div className="w-12 h-12 bg-orange-50 text-primary rounded-lg flex items-center justify-center mb-3 border border-orange-100">
+                      <KeyRound size={22} />
+                    </div>
+                    <h2 className="text-2xl font-black text-dark tracking-tight">
+                      Forgot Password?
+                    </h2>
+                    <p className="text-gray-500 text-xs mt-1 max-w-xs">
+                      Enter your registered Gmail address to verify your account and receive a 6-digit recovery code.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSendResetVerificationCode} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Enter your Gmail
+                      </label>
+                      <div className="relative group">
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
+                        <input 
+                          type="email" 
+                          id="forgot-email-input"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          placeholder="yourname@gmail.com"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
+                          required
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      id="forgot-send-code-btn"
+                      disabled={loading}
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <RefreshCw size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          <span>Send Verification Code</span>
+                          <ArrowRight size={14} />
+                        </>
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="mt-6 text-center border-t border-gray-100 pt-4">
+                    <p className="text-xs text-gray-500">
+                      Remember your password?{' '}
+                      <button 
+                        type="button"
+                        onClick={() => { setActiveTab('signin'); setError(''); }}
+                        className="font-bold text-dark hover:text-primary transition-colors ml-1"
+                      >
+                        Sign In
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: Enter Verification Code */}
+              {forgotStep === 2 && (
+                <div>
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-black text-dark tracking-tight">Enter Verification Code</h3>
+                    <p className="text-gray-500 text-xs mt-1">
+                      We sent a 6-digit code to <span className="font-bold text-dark">{forgotEmail}</span>
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleVerifyResetCode} className="space-y-5">
+                    <div className="flex justify-between gap-2">
+                      {forgotOtpCode.map((digit, idx) => (
+                        <input 
+                          key={idx}
+                          ref={(el) => { forgotOtpInputRefs.current[idx] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={digit}
+                          onChange={(e) => handleForgotOtpChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleForgotOtpKeyDown(idx, e)}
+                          className="w-11 h-12 text-center text-lg font-black bg-white border border-gray-300 rounded-lg focus:border-dark focus:ring-1 focus:ring-dark outline-none transition-all text-dark"
+                          autoFocus={idx === 0}
+                        />
+                      ))}
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      id="forgot-verify-code-btn"
+                      disabled={loading || forgotOtpCode.join('').length !== 6}
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      {loading ? (
+                        <RefreshCw size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={16} />
+                          <span>Verify Code</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+
+                  <div className="mt-5 text-center text-xs space-y-2 border-t border-gray-100 pt-4">
+                    <div className="flex items-center justify-center gap-1.5 text-gray-500">
+                      <span>Didn't receive the code?</span>
+                      {resendCooldown > 0 ? (
+                        <span className="font-bold text-dark font-mono">Resend in {resendCooldown}s</span>
+                      ) : (
+                        <button 
+                          type="button"
+                          onClick={() => handleSendResetVerificationCode()}
+                          disabled={loading}
+                          className="font-bold text-primary hover:text-orange-700 underline transition-colors"
+                        >
+                          Resend Code
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <button 
+                        type="button"
+                        onClick={() => { setForgotStep(1); setError(''); }}
+                        className="text-gray-400 hover:text-dark text-[11px] underline"
+                      >
+                        Change Gmail address
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: Create New Password */}
+              {forgotStep === 3 && (
+                <div>
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-black text-dark tracking-tight">Create New Password</h3>
+                    <p className="text-gray-500 text-xs mt-1">Set a secure 8-character password for {forgotEmail}</p>
+                  </div>
+
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                    {/* Create New Password */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Create New Password (8 characters)
+                      </label>
+                      <div className="relative group">
+                        <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
+                        <input 
+                          type={showNewPassword ? 'text' : 'password'}
+                          id="reset-newpassword-input"
+                          maxLength={8}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="e.g. Pass1234"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
+                          required
+                          autoFocus
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirm New Password */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        Confirm New Password
+                      </label>
+                      <div className="relative group">
+                        <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
+                        <input 
+                          type={showNewPassword ? 'text' : 'password'}
+                          id="reset-confirmpassword-input"
+                          maxLength={8}
+                          value={confirmNewPassword}
+                          onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          placeholder="Re-enter 8-character password"
+                          className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Password Rules Live Checklist */}
+                    <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Password Requirements:</p>
+                      <div className="space-y-1 text-xs font-medium">
+                        <div className={`flex items-center gap-2 ${resetPasswordRules.exactEightChars ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {resetPasswordRules.exactEightChars ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
+                          <span>Exactly 8 characters total ({newPassword.length}/8)</span>
+                        </div>
+                        <div className={`flex items-center gap-2 ${resetPasswordRules.hasUppercase ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {resetPasswordRules.hasUppercase ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
+                          <span>At least 1 uppercase / capital letter (A-Z)</span>
+                        </div>
+                        <div className={`flex items-center gap-2 ${resetPasswordRules.hasNumber ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                          {resetPasswordRules.hasNumber ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-gray-400" />}
+                          <span>At least 1 number (0-9)</span>
+                        </div>
+                        {confirmNewPassword.length > 0 && (
+                          <div className={`flex items-center gap-2 ${resetPasswordRules.passwordsMatch ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}`}>
+                            {resetPasswordRules.passwordsMatch ? <Check size={13} className="text-green-600" /> : <X size={13} className="text-red-500" />}
+                            <span>{resetPasswordRules.passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      id="reset-password-submit-btn"
+                      disabled={loading || !isResetPasswordFullyValid || newPassword !== confirmNewPassword}
+                      className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-40"
+                    >
+                      {loading ? (
+                        <RefreshCw size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={16} />
+                          <span>Reset Password</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* STEP 4: Success Message & Sign In */}
+              {forgotStep === 4 && (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-200">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h3 className="text-2xl font-black text-dark tracking-tight mb-2">
+                    Password Reset Complete!
+                  </h3>
+                  <p className="text-gray-600 text-sm mb-6 max-w-sm mx-auto leading-relaxed">
+                    Your password has been successfully changed. You can now log in using your existing Gmail and new password.
+                  </p>
+
+                  <button 
+                    type="button" 
+                    id="back-to-signin-btn"
+                    onClick={handleBackToSignInAfterReset}
+                    className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors active:translate-y-0.5 flex items-center justify-center gap-2"
+                  >
+                    <LogIn size={16} />
+                    <span>Back to Sign In</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

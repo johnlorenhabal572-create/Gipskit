@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Order, Product, InventoryItem, InventoryLog } from '../models';
+import { Order, Product, InventoryItem, InventoryLog, User } from '../models';
 import { getDbStatus, memoryStore } from '../db';
+import { sendOrderStatusEmail } from '../email';
 
 const router = Router();
 
@@ -372,11 +373,54 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
       }
+      const previousStatus = order.status;
       order.status = status;
       if (status === 'Paid' || status === 'Completed') {
         order.paymentStatus = 'Paid';
       }
       await order.save();
+
+      // Only send notification when the corresponding status button is actually clicked and the status successfully changes
+      if (previousStatus !== status) {
+        let orderWithEmail: any = order.toObject ? order.toObject() : { ...order };
+        const hasDirectEmail = (order.customer?.email && order.customer.email.includes('@')) || (order.userEmail && order.userEmail.includes('@'));
+        if (!hasDirectEmail) {
+          try {
+            const registeredUser = await User.findOne({
+              $or: [
+                { name: order.customer?.name },
+                { name: order.userName },
+                { phone: order.customer?.phone }
+              ]
+            }).lean();
+            if (registeredUser?.email) {
+              orderWithEmail.userEmail = registeredUser.email;
+            }
+          } catch (userLookupErr) {
+            console.warn('[Order Status] User email lookup failed:', userLookupErr);
+          }
+        }
+
+        if (status === 'Processing') {
+          // 1. Process Order / Processing:
+          // When admin clicks Process Order and status changes to Processing,
+          // send email telling customer order is confirmed and is being processed.
+          sendOrderStatusEmail(orderWithEmail, 'Processing').catch(err => {
+            console.error(`[Order Email] Error sending Processing email for order ${id}:`, err);
+          });
+        } else if (status === 'Ready for Pickup' || status === 'Ready to Pickup') {
+          // 3. Ready for Pickup:
+          // When admin clicks Ready for Pickup and status changes to Ready for Pickup,
+          // send email telling customer order is ready for pickup.
+          sendOrderStatusEmail(orderWithEmail, 'Ready for Pickup').catch(err => {
+            console.error(`[Order Email] Error sending Ready for Pickup email for order ${id}:`, err);
+          });
+        }
+        // 2. Cooking:
+        // When changed from Processing -> Cooking, DO NOT send an email.
+        // Status updates normally and is visible in order-status system without emailing.
+      }
+
       return res.json(order);
     }
 
@@ -384,11 +428,39 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     if (orderIdx === -1) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    const previousStatus = memoryStore.orders[orderIdx].status;
     memoryStore.orders[orderIdx].status = status;
     if (status === 'Paid' || status === 'Completed') {
       memoryStore.orders[orderIdx].paymentStatus = 'Paid';
     }
-    return res.json(memoryStore.orders[orderIdx]);
+    const updatedOrder = memoryStore.orders[orderIdx];
+
+    if (previousStatus !== status) {
+      let orderWithEmail = { ...updatedOrder };
+      const hasDirectEmail = (updatedOrder.customer?.email && updatedOrder.customer.email.includes('@')) || (updatedOrder.userEmail && updatedOrder.userEmail.includes('@'));
+      if (!hasDirectEmail) {
+        const registeredUser = memoryStore.users.find(u => 
+          (updatedOrder.customer?.name && u.name === updatedOrder.customer.name) ||
+          (updatedOrder.userName && u.name === updatedOrder.userName) ||
+          (updatedOrder.customer?.phone && (u as any).phone === updatedOrder.customer.phone)
+        );
+        if (registeredUser?.email) {
+          orderWithEmail.userEmail = registeredUser.email;
+        }
+      }
+
+      if (status === 'Processing') {
+        sendOrderStatusEmail(orderWithEmail, 'Processing').catch(err => {
+          console.error(`[Order Email] Error sending Processing email for order ${id}:`, err);
+        });
+      } else if (status === 'Ready for Pickup' || status === 'Ready to Pickup') {
+        sendOrderStatusEmail(orderWithEmail, 'Ready for Pickup').catch(err => {
+          console.error(`[Order Email] Error sending Ready for Pickup email for order ${id}:`, err);
+        });
+      }
+    }
+
+    return res.json(updatedOrder);
   } catch (error) {
     console.error('Error updating order status:', error);
     res.status(500).json({ error: 'Failed to update order status' });

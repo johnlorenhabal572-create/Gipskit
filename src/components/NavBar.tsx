@@ -170,7 +170,7 @@ const Navbar = () => {
           ]
         },
         {
-          title: 'Account',
+          title: 'My Orders',
           links: [
             { name: 'Order History', path: '/my-orders', icon: <ClipboardList size={20} />, badge: customerOrderUpdates },
             { name: 'My Bill', path: '/my-bill', icon: <Receipt size={20} /> },
