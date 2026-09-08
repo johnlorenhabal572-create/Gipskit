@@ -16,17 +16,23 @@ const LandingPage = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center overflow-hidden">
-      {/* Subtle Inasal Background Hero Element */}
+      {/* Chicken Inasal Photo Hero Background */}
       <div className="absolute inset-0 pointer-events-none select-none z-0">
         <img 
-          src={IMAGES.INASAL_HERO} 
+          src={IMAGES.HERO_BG} 
           alt="Chicken Inasal Gip's Kitchen" 
-          className="w-full h-full object-cover object-center opacity-10 filter brightness-105 contrast-105"
+          className="w-full h-full object-cover object-center"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            // Graceful fallback if image file is being uploaded/updated
+            if (e.currentTarget.src !== window.location.origin + IMAGES.INASAL_HERO) {
+              e.currentTarget.src = IMAGES.INASAL_HERO;
+            }
+          }}
         />
-        {/* Soft white vignette & gradient overlay for optimal text contrast and readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/85 to-white" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-50/40 via-transparent to-white/90" />
+        {/* Subtle soft overlay so food photo remains clearly visible while text stays readable */}
+        <div className="absolute inset-0 bg-white/60" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-transparent to-white/80" />
       </div>
 
       {/* Hero Section */}
