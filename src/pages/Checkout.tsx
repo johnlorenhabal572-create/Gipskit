@@ -55,8 +55,7 @@ const Checkout = () => {
         phone: '',
         paymentMethod: 'GCash'
       });
-      alert("Order placed successfully! Please proceed to My Bill for payment.");
-      navigate('/my-bill'); 
+      navigate('/my-bill', { state: { newOrder: savedOrder } }); 
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Failed to place order. Please try again.');

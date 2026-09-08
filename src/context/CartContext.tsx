@@ -8,10 +8,10 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     return savedCart ? JSON.parse(savedCart) : [];
   });
 
-  const [notification, setNotification] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type?: string } | string | null>(null);
 
-  const showNotification = useCallback((message: string) => {
-    setNotification(message);
+  const showNotification = useCallback((message: string, type: 'default' | 'success' = 'default') => {
+    setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   }, []);
 

@@ -348,17 +348,26 @@ const Navbar = () => {
 
       {/* Notification Popup */}
       <AnimatePresence>
-        {notification && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, x: '-50%' }}
-            animate={{ opacity: 1, y: 15, x: '-50%' }}
-            exit={{ opacity: 0, y: -10, x: '-50%' }}
-            className="fixed top-14 left-1/2 z-50 bg-white border border-gray-200 px-5 py-2.5 rounded-lg flex items-center gap-2.5"
-          >
-            <CheckCircle2 size={16} className="text-primary shrink-0" />
-            <span className="text-xs font-bold text-dark">{notification}</span>
-          </motion.div>
-        )}
+        {notification && (() => {
+          const message = typeof notification === 'string' ? notification : notification.message;
+          const isSuccess = (typeof notification === 'object' && notification?.type === 'success') || message === 'Payment Successful!';
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: -10, x: '-50%' }}
+              animate={{ opacity: 1, y: 15, x: '-50%' }}
+              exit={{ opacity: 0, y: -10, x: '-50%' }}
+              className={`fixed top-14 left-1/2 z-50 px-5 py-2.5 rounded-lg flex items-center gap-2.5 shadow-md ${
+                isSuccess 
+                  ? 'bg-green-50 border border-green-200 text-green-800' 
+                  : 'bg-white border border-gray-200 text-dark'
+              }`}
+            >
+              <CheckCircle2 size={16} className={`shrink-0 ${isSuccess ? 'text-green-600' : 'text-primary'}`} />
+              <span className={`text-xs font-bold ${isSuccess ? 'text-green-900' : 'text-dark'}`}>{message}</span>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Sidebar Overlay */}

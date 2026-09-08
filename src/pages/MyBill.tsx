@@ -1,15 +1,23 @@
 import { useState, useEffect, useContext } from 'react';
 import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
+import { CartContext } from '../context/CartContext';
 import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const MyBill = () => {
-  const [bills, setBills] = useState<any[]>([]);
+  const location = useLocation();
+  const newOrderFromNav = (location.state as any)?.newOrder;
+
+  const [bills, setBills] = useState<any[]>(() => {
+    return newOrderFromNav && newOrderFromNav.status === 'Pending' ? [newOrderFromNav] : [];
+  });
   const [uploading, setUploading] = useState<string | null>(null);
   const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<{ [key: string]: string }>({});
+  const [loadingInitial, setLoadingInitial] = useState<boolean>(!newOrderFromNav);
   const { user } = useContext(AuthContext) as any;
+  const { showNotification } = useContext(CartContext) as any;
   const navigate = useNavigate();
 
   const loadBills = async () => {
@@ -26,6 +34,8 @@ const MyBill = () => {
       setBills(activeBills);
     } catch (err) {
       console.error('Failed to load bills:', err);
+    } finally {
+      setLoadingInitial(false);
     }
   };
 
@@ -64,6 +74,7 @@ const MyBill = () => {
 
     try {
       await modifyOrderStatus(orderId, 'Paid');
+      showNotification('Payment Successful!', 'success');
       navigate('/my-orders');
     } catch (err: any) {
       console.error('Failed to confirm order payment:', err);
@@ -78,7 +89,12 @@ const MyBill = () => {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 max-w-4xl py-6 sm:py-8">
-      {bills.length === 0 ? (
+      {loadingInitial && bills.length === 0 ? (
+        <div className="bg-white rounded-xl p-12 text-center border border-gray-200 flex flex-col items-center justify-center">
+          <RefreshCw size={28} className="animate-spin text-gray-400 mb-3" />
+          <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Loading your bill...</p>
+        </div>
+      ) : bills.length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
           <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
             <ShoppingBag size={28} className="text-gray-400" />
