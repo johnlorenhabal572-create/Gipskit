@@ -42,10 +42,10 @@ const Catalog = () => {
   // Combine dynamic categories list with 'All'
   const categories = ['All', ...categoriesList];
 
-  // Filter products based on selected category and search term
+  // Filter products based on selected category and search term (matching menu item name only)
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const q = searchTerm.toLowerCase().trim();
+    const matchesSearch = q === '' || (p.name ? p.name.toLowerCase().includes(q) : false);
     const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });

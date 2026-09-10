@@ -8,6 +8,7 @@ export interface IProduct extends Document {
   stock: number;
   image: string;
   inventoryLinkId?: string | null;
+  inventoryLinkIds?: string[];
   status: 'Available' | 'Unavailable' | 'Not Available' | 'Out of Stock';
   description?: string;
   createdAt: Date;
@@ -23,6 +24,7 @@ const ProductSchema: Schema<IProduct> = new Schema(
     stock: { type: Number, default: 0, min: [0, 'Stock cannot be negative'] },
     image: { type: String, default: '' },
     inventoryLinkId: { type: String, default: null },
+    inventoryLinkIds: { type: [String], default: [] },
     status: { 
       type: String, 
       enum: ['Available', 'Unavailable', 'Not Available', 'Out of Stock'], 

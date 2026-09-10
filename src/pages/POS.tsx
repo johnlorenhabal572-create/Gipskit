@@ -9,6 +9,7 @@ import {
   XCircle, ShoppingCart, Receipt, DollarSign, Wallet, 
   ArrowRight, FileText, BarChart3, RefreshCw
 } from 'lucide-react';
+import { formatPrice } from '../utils/format';
 
 const POS = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -172,6 +173,7 @@ const POS = () => {
         price: item.price,
         quantity: item.quantity,
         inventoryLinkId: item.inventoryLinkId || null,
+        inventoryLinkIds: Array.isArray(item.inventoryLinkIds) ? item.inventoryLinkIds : (item.inventoryLinkId ? [item.inventoryLinkId] : []),
         image: item.image || '',
         category: item.category || ''
       })),

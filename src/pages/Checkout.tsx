@@ -4,6 +4,7 @@ import { createOrder } from '../api/orderService';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { RefreshCw } from 'lucide-react';
+import { formatPrice } from '../utils/format';
 
 const Checkout = () => {
   const { cart, getCartTotal, clearCart } = useContext(CartContext) as any;
@@ -75,15 +76,15 @@ const Checkout = () => {
             <div key={index} className="flex justify-between items-center text-dark pt-2 first:pt-0">
               <div className="flex flex-col">
                 <span className="font-bold text-sm">{item.name}</span>
-                <span className="text-xs text-gray-500 font-medium">Qty: {item.quantity} × ₱{item.price}</span>
+                <span className="text-xs text-gray-500 font-medium">Qty: {item.quantity} × {formatPrice(item.price)}</span>
               </div>
-              <span className="font-black text-primary text-sm">₱{item.price * item.quantity}</span>
+              <span className="font-black text-primary text-sm">{formatPrice(item.price * item.quantity)}</span>
             </div>
           ))}
         </div>
         <div className="border-t border-gray-200 mt-5 pt-4 flex justify-between items-center">
           <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Total Amount</span>
-          <span className="text-2xl font-black text-dark tracking-tight">₱{getCartTotal()}</span>
+          <span className="text-2xl font-black text-dark tracking-tight">{formatPrice(getCartTotal())}</span>
         </div>
       </div>
 

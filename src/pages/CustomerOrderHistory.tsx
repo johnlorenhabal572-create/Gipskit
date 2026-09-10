@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { Search, Clock, X, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatPrice } from '../utils/format';
 
 const CustomerOrderHistory = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
@@ -105,7 +106,7 @@ const CustomerOrderHistory = () => {
                       {order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status)}
                     </span>
                   </div>
-                  <h4 className="font-black text-base text-dark">₱{order.total}</h4>
+                  <h4 className="font-black text-base text-dark">{formatPrice(order.total)}</h4>
                   <p className="text-xs text-gray-500">
                     {new Date(order.date || order.createdAt).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                   </p>
@@ -163,15 +164,22 @@ const CustomerOrderHistory = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-dark text-xs truncate">{item.name}</h4>
-                        <p className="text-xs text-gray-500">₱{item.price} × {item.quantity}</p>
+                        <p className="text-xs text-gray-500">{formatPrice(item.price)} × {item.quantity}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-dark text-xs">₱{item.price * item.quantity}</p>
+                        <p className="font-bold text-dark text-xs">{formatPrice(item.price * item.quantity)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
                 
+                {selectedOrder.status === 'Cancelled' && (
+                  <div className="bg-red-50 p-3.5 rounded-lg border border-red-200 text-red-800 text-xs flex items-center gap-2 font-medium">
+                    <X size={16} className="shrink-0 text-red-600" />
+                    <span>This order was cancelled and will not be prepared or charged.</span>
+                  </div>
+                )}
+
                 {selectedOrder.status !== 'Cancelled' && (
                   <div className="bg-gray-50/80 p-3.5 rounded-lg border border-gray-200">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Order Preparation Progress</p>
@@ -234,7 +242,7 @@ const CustomerOrderHistory = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Bill</p>
-                    <p className="text-2xl font-black text-primary tracking-tight">₱{selectedOrder.total}</p>
+                    <p className="text-2xl font-black text-primary tracking-tight">{formatPrice(selectedOrder.total)}</p>
                   </div>
                 </div>
               </div>

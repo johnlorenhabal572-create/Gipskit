@@ -243,16 +243,22 @@ router.post('/', async (req: Request, res: Response) => {
       },
       userEmail: userEmail || '',
       userName: userName || customer?.name || '',
-      items: items.map(item => ({
-        id: item.id,
-        name: item.name,
-        price: Number(item.price),
-        quantity: Number(item.quantity),
-        inventoryLinkId: item.inventoryLinkId || null,
-        unit: item.unit || 'pcs',
-        image: item.image || '',
-        category: item.category || ''
-      })),
+      items: items.map(item => {
+        const linkIds: string[] = Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0
+          ? item.inventoryLinkIds
+          : (item.inventoryLinkId ? [item.inventoryLinkId] : []);
+        return {
+          id: item.id,
+          name: item.name,
+          price: Number(item.price),
+          quantity: Number(item.quantity),
+          inventoryLinkId: linkIds[0] || null,
+          inventoryLinkIds: linkIds,
+          unit: item.unit || 'pcs',
+          image: item.image || '',
+          category: item.category || ''
+        };
+      }),
       subtotal: subtotal !== undefined ? Number(subtotal) : calculatedTotal,
       total: calculatedTotal,
       amountPaid: amountPaid ? Number(amountPaid) : 0,
@@ -275,36 +281,56 @@ router.post('/', async (req: Request, res: Response) => {
     if (isConnected) {
       for (const item of items) {
         const qty = Number(item.quantity) || 1;
-        if (item.inventoryLinkId) {
-          // Deduct from InventoryItem
-          const invItem = await InventoryItem.findOne({ id: item.inventoryLinkId });
-          if (invItem) {
-            const prevQty = invItem.quantity;
-            const newQty = Math.max(0, prevQty - qty);
-            invItem.quantity = newQty;
-            const threshold = invItem.lowStockThreshold || 10;
-            if (newQty <= threshold && prevQty > threshold) {
-              invItem.lowStockAcknowledged = false;
+        let linkIds: string[] = [];
+        if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+          linkIds = item.inventoryLinkIds;
+        } else if (item.inventoryLinkId) {
+          linkIds = [item.inventoryLinkId];
+        } else {
+          const numId = Number(item.id);
+          const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
+          if (prod) {
+            if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
+              linkIds = prod.inventoryLinkIds;
+            } else if (prod.inventoryLinkId) {
+              linkIds = [prod.inventoryLinkId];
             }
-            await invItem.save();
+          }
+        }
 
-            // Log the order deduction
-            await InventoryLog.create({
-              id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              inventoryId: item.inventoryLinkId,
-              itemName: invItem.name,
-              type: 'order-deduction',
-              quantityChange: -qty,
-              remainingQuantity: newQty,
-              reason: `Auto-deducted for Order ${orderId}`,
-              orderId,
-              performedBy: performerEmail,
-              date: new Date()
-            });
+        if (linkIds.length > 0) {
+          // Deduct from all linked InventoryItems
+          for (const invId of linkIds) {
+            const invItem = await InventoryItem.findOne({ id: invId });
+            if (invItem) {
+              const prevQty = invItem.quantity;
+              const newQty = Math.max(0, prevQty - qty);
+              invItem.quantity = newQty;
+              const threshold = invItem.lowStockThreshold || 10;
+              if (newQty <= threshold && prevQty > threshold) {
+                invItem.lowStockAcknowledged = false;
+              }
+              await invItem.save();
+
+              // Log the order deduction
+              await InventoryLog.create({
+                id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                inventoryId: invId,
+                itemName: invItem.name,
+                type: 'order-deduction',
+                quantityChange: -qty,
+                remainingQuantity: newQty,
+                reason: `Auto-deducted for Order ${orderId}`,
+                orderId,
+                performedBy: performerEmail,
+                date: new Date()
+              });
+            }
           }
         } else {
           // Manual product stock deduction
-          const prod = await Product.findOne({ id: Number(item.id) || item.id });
+          const numId = Number(item.id);
+          const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
           if (prod) {
             prod.stock = Math.max(0, (prod.stock || 0) - qty);
             await prod.save();
@@ -319,26 +345,44 @@ router.post('/', async (req: Request, res: Response) => {
     // In-memory fallback deduction
     for (const item of items) {
       const qty = Number(item.quantity) || 1;
-      if (item.inventoryLinkId) {
-        const invItem = memoryStore.inventory.find(i => i.id === item.inventoryLinkId);
-        if (invItem) {
-          const prevQty = invItem.quantity;
-          invItem.quantity = Math.max(0, invItem.quantity - qty);
-          const threshold = invItem.lowStockThreshold || 10;
-          if (invItem.quantity <= threshold && prevQty > threshold) {
-            invItem.lowStockAcknowledged = false;
+      let linkIds: string[] = [];
+      if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+        linkIds = item.inventoryLinkIds;
+      } else if (item.inventoryLinkId) {
+        linkIds = [item.inventoryLinkId];
+      } else {
+        const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
+        if (prod) {
+          if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
+            linkIds = prod.inventoryLinkIds;
+          } else if (prod.inventoryLinkId) {
+            linkIds = [prod.inventoryLinkId];
           }
-          memoryStore.inventoryLogs.push({
-            id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            inventoryItemId: item.inventoryLinkId,
-            inventoryItemName: invItem.name,
-            type: 'order-deduction',
-            quantity: -qty,
-            remainingQuantity: invItem.quantity,
-            notes: `Auto-deducted for Order ${orderId}`,
-            performer: performerEmail,
-            timestamp: new Date().toISOString()
-          });
+        }
+      }
+
+      if (linkIds.length > 0) {
+        for (const invId of linkIds) {
+          const invItem = memoryStore.inventory.find(i => i.id === invId);
+          if (invItem) {
+            const prevQty = invItem.quantity;
+            invItem.quantity = Math.max(0, invItem.quantity - qty);
+            const threshold = invItem.lowStockThreshold || 10;
+            if (invItem.quantity <= threshold && prevQty > threshold) {
+              invItem.lowStockAcknowledged = false;
+            }
+            memoryStore.inventoryLogs.push({
+              id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              inventoryItemId: invId,
+              inventoryItemName: invItem.name,
+              type: 'order-deduction',
+              quantity: -qty,
+              remainingQuantity: invItem.quantity,
+              notes: `Auto-deducted for Order ${orderId}`,
+              performer: performerEmail,
+              timestamp: new Date().toISOString()
+            });
+          }
         }
       } else {
         const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
@@ -359,7 +403,8 @@ router.post('/', async (req: Request, res: Response) => {
 // 6. PATCH /api/orders/:id/status - Update order status
 router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = (Array.isArray(rawId) ? rawId[0] : rawId) || '';
     const { status } = req.body;
 
     if (!status) {
@@ -373,11 +418,76 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
       }
+
+      // Safeguard: A cancelled order must not be able to proceed to Processing, Cooking, Ready for Pickup, or Completed
+      if (order.status === 'Cancelled' && status !== 'Cancelled') {
+        return res.status(400).json({ error: 'This order has been cancelled and cannot proceed to any other status.' });
+      }
+
       const previousStatus = order.status;
       order.status = status;
       if (status === 'Paid' || status === 'Completed') {
         order.paymentStatus = 'Paid';
+      } else if (status === 'Cancelled') {
+        order.paymentStatus = 'Cancelled';
       }
+
+      // Auto-restock inventory/products if cancelling an active order
+      if (status === 'Cancelled' && previousStatus !== 'Cancelled') {
+        const performerEmail = getUserEmail(req) || 'system';
+        if (Array.isArray(order.items)) {
+          for (const item of order.items) {
+            const qty = Number(item.quantity) || 1;
+            let linkIds: string[] = [];
+            if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+              linkIds = item.inventoryLinkIds;
+            } else if (item.inventoryLinkId) {
+              linkIds = [item.inventoryLinkId];
+            } else {
+              const numId = Number(item.id);
+              const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
+              if (prod) {
+                if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
+                  linkIds = prod.inventoryLinkIds;
+                } else if (prod.inventoryLinkId) {
+                  linkIds = [prod.inventoryLinkId];
+                }
+              }
+            }
+
+            if (linkIds.length > 0) {
+              for (const invId of linkIds) {
+                const invItem = await InventoryItem.findOne({ id: invId });
+                if (invItem) {
+                  invItem.quantity = (invItem.quantity || 0) + qty;
+                  await invItem.save();
+
+                  await InventoryLog.create({
+                    id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                    inventoryId: invId,
+                    itemName: invItem.name,
+                    type: 'order-cancellation-restock',
+                    quantityChange: qty,
+                    remainingQuantity: invItem.quantity,
+                    reason: `Restocked from Cancelled Order ${id}`,
+                    orderId: id,
+                    performedBy: performerEmail,
+                    date: new Date()
+                  }).catch(() => {});
+                }
+              }
+            } else {
+              const numId = Number(item.id);
+              const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
+              if (prod) {
+                prod.stock = (prod.stock || 0) + qty;
+                await prod.save();
+              }
+            }
+          }
+        }
+      }
+
       await order.save();
 
       // Only send notification when the corresponding status button is actually clicked and the status successfully changes
@@ -428,11 +538,57 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     if (orderIdx === -1) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    if (memoryStore.orders[orderIdx].status === 'Cancelled' && status !== 'Cancelled') {
+      return res.status(400).json({ error: 'This order has been cancelled and cannot proceed to any other status.' });
+    }
+
     const previousStatus = memoryStore.orders[orderIdx].status;
     memoryStore.orders[orderIdx].status = status;
     if (status === 'Paid' || status === 'Completed') {
       memoryStore.orders[orderIdx].paymentStatus = 'Paid';
+    } else if (status === 'Cancelled') {
+      memoryStore.orders[orderIdx].paymentStatus = 'Cancelled';
     }
+
+    if (status === 'Cancelled' && previousStatus !== 'Cancelled') {
+      const targetOrder = memoryStore.orders[orderIdx];
+      if (Array.isArray(targetOrder.items)) {
+        for (const item of targetOrder.items) {
+          const qty = Number(item.quantity) || 1;
+          let linkIds: string[] = [];
+          if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+            linkIds = item.inventoryLinkIds;
+          } else if (item.inventoryLinkId) {
+            linkIds = [item.inventoryLinkId];
+          } else {
+            const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
+            if (prod) {
+              if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
+                linkIds = prod.inventoryLinkIds;
+              } else if (prod.inventoryLinkId) {
+                linkIds = [prod.inventoryLinkId];
+              }
+            }
+          }
+
+          if (linkIds.length > 0) {
+            for (const invId of linkIds) {
+              const invItem = memoryStore.inventory.find(i => i.id === invId);
+              if (invItem) {
+                invItem.quantity = (invItem.quantity || 0) + qty;
+              }
+            }
+          } else {
+            const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
+            if (prod) {
+              prod.stock = (prod.stock || 0) + qty;
+            }
+          }
+        }
+      }
+    }
+
     const updatedOrder = memoryStore.orders[orderIdx];
 
     if (previousStatus !== status) {
@@ -481,6 +637,10 @@ router.patch('/:id/payment', async (req: Request, res: Response) => {
         return res.status(404).json({ error: 'Order not found' });
       }
 
+      if (order.status === 'Cancelled') {
+        return res.status(400).json({ error: 'Payment cannot be confirmed or updated for a cancelled order.' });
+      }
+
       if (paymentScreenshot !== undefined) order.paymentScreenshot = paymentScreenshot;
       if (paymentStatus) order.paymentStatus = paymentStatus;
       if (paymentMethod) order.paymentMethod = paymentMethod;
@@ -495,6 +655,11 @@ router.patch('/:id/payment', async (req: Request, res: Response) => {
     if (orderIdx === -1) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    if (memoryStore.orders[orderIdx].status === 'Cancelled') {
+      return res.status(400).json({ error: 'Payment cannot be confirmed or updated for a cancelled order.' });
+    }
+
     if (paymentScreenshot !== undefined) memoryStore.orders[orderIdx].paymentScreenshot = paymentScreenshot;
     if (paymentStatus) memoryStore.orders[orderIdx].paymentStatus = paymentStatus;
     if (paymentMethod) memoryStore.orders[orderIdx].paymentMethod = paymentMethod;

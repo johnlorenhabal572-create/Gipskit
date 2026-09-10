@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { X, Trash2, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatPrice } from '../utils/format';
 
 const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const { cart, getCartTotal, removeFromCart } = useContext(CartContext) as any; 
@@ -95,7 +96,7 @@ const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                     </div>
                     
                     <div className="text-right shrink-0">
-                      <p className="font-black text-primary text-xs mb-1.5">₱{item.price * item.quantity}</p>
+                      <p className="font-black text-primary text-xs mb-1.5">{formatPrice(item.price * item.quantity)}</p>
                       <button 
                         onClick={() => removeFromCart(item.id)} 
                         className="text-gray-400 hover:text-red-600 transition-colors p-1"
@@ -112,7 +113,7 @@ const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
             <div className="p-5 bg-gray-50 border-t border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-gray-500 font-bold uppercase tracking-wider text-xs">Total Amount</span>
-                <span className="text-2xl font-black text-dark tracking-tight">₱{getCartTotal()}</span>
+                <span className="text-2xl font-black text-dark tracking-tight">{formatPrice(getCartTotal())}</span>
               </div>
               <button
                 id="cart-checkout-btn"

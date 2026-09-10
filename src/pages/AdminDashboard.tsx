@@ -3,6 +3,7 @@ import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { useNotifications } from '../context/NotificationContext';
 import { X, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatPrice } from '../utils/format';
 
 const AdminDashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -40,10 +41,32 @@ const AdminDashboard = () => {
   }, []);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    // If order is already cancelled, don't allow proceeding to another status
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (targetOrder?.status === 'Cancelled') {
+      alert('This order has been cancelled and cannot proceed to another status.');
+      return;
+    }
     // Optimistic UI update
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     await modifyOrderStatus(orderId, newStatus);
     await loadOrders();
+  };
+
+  const handleCancelPendingOrder = async (orderId: string) => {
+    if (!window.confirm(`Are you sure you want to cancel order ${orderId}?`)) {
+      return;
+    }
+    // Optimistic UI update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
+    try {
+      await modifyOrderStatus(orderId, 'Cancelled');
+      await loadOrders();
+    } catch (err: any) {
+      console.error('Failed to cancel order:', err);
+      alert(err?.message || 'Failed to cancel order.');
+      await loadOrders();
+    }
   };
 
   const filteredOrders = orders.filter(order => {
@@ -179,7 +202,7 @@ const AdminDashboard = () => {
                               <span className="text-primary font-black">{item.quantity}×</span>
                               <span>{item.name}</span>
                               {item.price && (
-                                <span className="text-gray-400 text-[11px] font-normal">(₱{item.price * item.quantity})</span>
+                                <span className="text-gray-400 text-[11px] font-normal">({formatPrice(item.price * item.quantity)})</span>
                               )}
                             </div>
                           ))}
@@ -217,15 +240,25 @@ const AdminDashboard = () => {
                       )}
                       <div className="text-right">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Amount</p>
-                        <p className="text-2xl font-black text-primary tracking-tight">₱{order.total}</p>
+                        <p className="text-2xl font-black text-primary tracking-tight">{formatPrice(order.total)}</p>
                         <p className="text-[10px] font-bold text-gray-500 uppercase">{order.paymentMethod || 'GCash'}</p>
                       </div>
                     </div>
                     
                     <div className="flex flex-col gap-1.5 w-full sm:w-44">
                       {order.status === 'Pending' && (
-                        <div className="text-[10px] font-bold text-yellow-800 bg-yellow-100/80 border border-yellow-200 py-2 px-3 rounded-lg text-center uppercase tracking-wider">
-                          Awaiting Payment
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <div className="text-[10px] font-bold text-yellow-800 bg-yellow-100/80 border border-yellow-200 py-2 px-3 rounded-lg text-center uppercase tracking-wider">
+                            Awaiting Payment
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => handleCancelPendingOrder(order.id)}
+                            className="bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors text-center flex items-center justify-center gap-1.5 shadow-sm active:translate-y-0.5"
+                          >
+                            <X size={13} />
+                            <span>Cancel Order</span>
+                          </button>
                         </div>
                       )}
                       {order.status === 'Paid' && (
@@ -263,11 +296,20 @@ const AdminDashboard = () => {
                       )}
                       {order.status === 'Paid' && (
                         <button 
-                          onClick={() => handleStatusChange(order.id, 'Cancelled')}
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to decline and cancel order ${order.id}?`)) {
+                              handleStatusChange(order.id, 'Cancelled');
+                            }
+                          }}
                           className="text-gray-500 hover:text-red-600 text-[10px] font-bold uppercase tracking-wider py-1 text-center transition-colors"
                         >
                           Decline Transaction
                         </button>
+                      )}
+                      {order.status === 'Cancelled' && (
+                        <div className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 py-2 px-3 rounded-lg text-center uppercase tracking-wider">
+                          Cancelled
+                        </div>
                       )}
                     </div>
                   </div>

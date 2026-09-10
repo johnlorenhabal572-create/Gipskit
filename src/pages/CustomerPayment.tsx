@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { CreditCard, CheckCircle2, Eye, User, Phone, MapPin, Facebook, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
+import { formatPrice } from '../utils/format';
 
 const CustomerPayment = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -77,7 +78,7 @@ const CustomerPayment = () => {
                   <div className="space-y-1.5 mb-4 py-3 border-y border-gray-100">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500 font-medium">Total Amount:</span>
-                      <span className="font-bold text-dark">₱{order.total}</span>
+                      <span className="font-bold text-dark">{formatPrice(order.total)}</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500 font-medium">Payment Status:</span>
@@ -154,7 +155,7 @@ const CustomerPayment = () => {
                       <div className="bg-dark p-4 rounded-lg text-white">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Order Total</span>
-                          <span className="text-xl font-black text-white">₱{selectedOrder.total}</span>
+                          <span className="text-xl font-black text-white">{formatPrice(selectedOrder.total)}</span>
                         </div>
                         <div className="flex justify-between items-center text-xs">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">Payment Method</span>
@@ -181,7 +182,7 @@ const CustomerPayment = () => {
                         <div className="bg-amber-50 rounded-lg p-6 text-center border border-amber-200">
                           <CreditCard size={32} className="text-amber-700 mx-auto mb-2" />
                           <h4 className="text-sm font-bold text-amber-900 mb-1">Cash on Pickup</h4>
-                          <p className="text-amber-800 text-xs">Collect ₱{selectedOrder.total} from the customer upon store pickup.</p>
+                          <p className="text-amber-800 text-xs">Collect {formatPrice(selectedOrder.total)} from the customer upon store pickup.</p>
                         </div>
                       )}
                     </div>

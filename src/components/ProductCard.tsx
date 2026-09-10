@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Eye, X, Check, Package, Tag, AlertCircle, LogIn, ShoppingBag } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { formatPrice } from '../utils/format';
 
 const ProductCard = ({ product }: { product: any }) => {
   const { addToCart } = useContext(CartContext) as any;
@@ -65,7 +66,7 @@ const ProductCard = ({ product }: { product: any }) => {
             >
               {product.name}
             </h3>
-            <span className="text-primary font-black text-xs sm:text-sm shrink-0">₱{product.price}</span>
+            <span className="text-primary font-black text-xs sm:text-sm shrink-0">{formatPrice(product.price)}</span>
           </div>
 
           <div className="flex justify-between items-center mb-1.5 gap-1">
@@ -196,7 +197,7 @@ const ProductCard = ({ product }: { product: any }) => {
                       {product.name}
                     </h2>
                     <span className="text-2xl font-black text-primary shrink-0">
-                      ₱{product.price}
+                      {formatPrice(product.price)}
                     </span>
                   </div>
                 </div>
@@ -293,7 +294,7 @@ const ProductCard = ({ product }: { product: any }) => {
                       <ShoppingBag size={16} />
                       <span>
                         {isAvailable 
-                          ? `Add to Cart (₱${product.price * modalQty})` 
+                          ? `Add to Cart (${formatPrice(product.price * modalQty)})` 
                           : 'Currently Unavailable'}
                       </span>
                     </>

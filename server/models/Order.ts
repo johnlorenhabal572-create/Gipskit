@@ -6,6 +6,7 @@ export interface IOrderItem {
   price: number;
   quantity: number;
   inventoryLinkId?: string | null;
+  inventoryLinkIds?: string[];
   unit?: string;
   image?: string;
   category?: string;
@@ -30,7 +31,7 @@ export interface IOrder extends Document {
   amountPaid?: number;
   change?: number;
   paymentMethod: string;
-  paymentStatus: 'Unpaid' | 'Paid' | 'Refunded';
+  paymentStatus: 'Unpaid' | 'Paid' | 'Refunded' | 'Cancelled';
   status: 'Pending' | 'Paid' | 'Processing' | 'Cooking' | 'Ready for Pickup' | 'Ready to Pickup' | 'On Delivery' | 'Completed' | 'Cancelled';
   orderType: 'POS' | 'Online';
   paymentScreenshot?: string;
@@ -50,6 +51,7 @@ const OrderItemSchema = new Schema<IOrderItem>(
     price: { type: Number, required: true },
     quantity: { type: Number, required: true, min: 1 },
     inventoryLinkId: { type: String, default: null },
+    inventoryLinkIds: { type: [String], default: [] },
     unit: { type: String, default: 'pcs' },
     image: { type: String, default: '' },
     category: { type: String, default: '' }
@@ -86,7 +88,7 @@ const OrderSchema: Schema<IOrder> = new Schema(
     },
     paymentStatus: { 
       type: String, 
-      enum: ['Unpaid', 'Paid', 'Refunded'], 
+      enum: ['Unpaid', 'Paid', 'Refunded', 'Cancelled'], 
       default: 'Unpaid',
       index: true
     },

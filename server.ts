@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
-import { createServer as createViteServer } from 'vite';
 import { connectMongoose, getDbStatus, memoryStore, mongoose } from './server/db';
 import { User, VerificationCode, Order } from './server/models';
 import { sendVerificationEmail } from './server/email';
@@ -820,18 +820,30 @@ async function startServer() {
 
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    let distPath = path.join(process.cwd(), 'dist');
+    if (!fs.existsSync(path.join(distPath, 'index.html')) && typeof __dirname !== 'undefined') {
+      distPath = __dirname;
+    }
     app.use(express.static(distPath));
     app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Graceful error logging to prevent crashes in production
+  process.on('uncaughtException', (err) => {
+    console.error('[Uncaught Exception]', err);
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.warn('[Unhandled Rejection]', reason);
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running at:`);

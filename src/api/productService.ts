@@ -46,6 +46,19 @@ export const createCategory = async (name: string): Promise<any> => {
   return data;
 };
 
+// Async API: Delete category (Admin/Staff)
+export const deleteCategory = async (name: string): Promise<any> => {
+  const res = await fetch(`/api/categories/${encodeURIComponent(name.trim())}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to delete category');
+  }
+  return data;
+};
+
 // Helper to get authorization headers from current session
 export const getAuthHeaders = (): Record<string, string> => {
   try {
@@ -93,9 +106,22 @@ export const fetchProducts = async (filters?: { category?: string; search?: stri
     // Merge inventory stock levels for linked items (if raw inventory exists)
     const inventory = getInventory();
     return cachedProducts.map((p: any) => {
-      if (p.inventoryLinkId) {
-        const invItem = inventory.find((i: any) => i.id === p.inventoryLinkId);
-        return { ...p, stock: invItem ? invItem.quantity : (p.stock || 0) };
+      const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
+        ? p.inventoryLinkIds
+        : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
+
+      if (linkIds.length > 0) {
+        const quantities = linkIds.map(id => {
+          const invItem = inventory.find((i: any) => i.id === id);
+          return invItem ? invItem.quantity : 0;
+        });
+        const availableStock = Math.min(...quantities);
+        return { 
+          ...p, 
+          stock: availableStock, 
+          inventoryLinkId: linkIds[0] || null, 
+          inventoryLinkIds: linkIds 
+        };
       }
       return p;
     });
@@ -125,13 +151,18 @@ export const fetchProductById = async (id: number | string): Promise<any> => {
 
 // Async API: Create new product in MongoDB Atlas
 export const createProduct = async (newProduct: any): Promise<any> => {
+  const linkIds: string[] = Array.isArray(newProduct.inventoryLinkIds)
+    ? newProduct.inventoryLinkIds.filter(Boolean)
+    : (newProduct.inventoryLinkId ? [newProduct.inventoryLinkId] : []);
+
   const payload = {
     name: newProduct.name?.trim(),
     price: Number(newProduct.price),
     category: newProduct.category?.trim(),
     stock: Number(newProduct.stock || 0),
     image: newProduct.image || '',
-    inventoryLinkId: newProduct.inventoryLinkId || null,
+    inventoryLinkId: linkIds[0] || null,
+    inventoryLinkIds: linkIds,
     status: newProduct.status || 'Available',
     description: newProduct.description || ''
   };
@@ -154,10 +185,19 @@ export const createProduct = async (newProduct: any): Promise<any> => {
 
 // Async API: Update existing product in MongoDB Atlas
 export const editProduct = async (id: number | string, updatedData: any): Promise<any> => {
+  let payload = { ...updatedData };
+  if (updatedData.inventoryLinkIds !== undefined || updatedData.inventoryLinkId !== undefined) {
+    const linkIds: string[] = Array.isArray(updatedData.inventoryLinkIds)
+      ? updatedData.inventoryLinkIds.filter(Boolean)
+      : (updatedData.inventoryLinkId ? [updatedData.inventoryLinkId] : []);
+    payload.inventoryLinkIds = linkIds;
+    payload.inventoryLinkId = linkIds[0] || null;
+  }
+
   const res = await fetch(`/api/products/${id}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify(updatedData)
+    body: JSON.stringify(payload)
   });
 
   const data = await res.json();
@@ -195,9 +235,22 @@ export const getProducts = () => {
 
   const inventory = getInventory();
   return cachedProducts.map((p: any) => {
-    if (p.inventoryLinkId) {
-      const invItem = inventory.find((i: any) => i.id === p.inventoryLinkId);
-      return { ...p, stock: invItem ? invItem.quantity : (p.stock || 0) };
+    const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
+      ? p.inventoryLinkIds
+      : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
+
+    if (linkIds.length > 0) {
+      const quantities = linkIds.map(id => {
+        const invItem = inventory.find((i: any) => i.id === id);
+        return invItem ? invItem.quantity : 0;
+      });
+      const availableStock = Math.min(...quantities);
+      return { 
+        ...p, 
+        stock: availableStock, 
+        inventoryLinkId: linkIds[0] || null, 
+        inventoryLinkIds: linkIds 
+      };
     }
     return p;
   });

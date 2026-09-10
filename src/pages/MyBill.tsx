@@ -2,8 +2,9 @@ import { useState, useEffect, useContext } from 'react';
 import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
-import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw } from 'lucide-react';
+import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { formatPrice } from '../utils/format';
 
 const MyBill = () => {
   const location = useLocation();
@@ -14,6 +15,7 @@ const MyBill = () => {
   });
   const [uploading, setUploading] = useState<string | null>(null);
   const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<{ [key: string]: string }>({});
   const [loadingInitial, setLoadingInitial] = useState<boolean>(!newOrderFromNav);
   const { user } = useContext(AuthContext) as any;
@@ -68,7 +70,13 @@ const MyBill = () => {
   };
 
   const handleConfirmOrder = async (orderId: string) => {
-    if (processingPaymentId) return; // Prevent duplicate payment/order submissions
+    if (processingPaymentId || cancellingOrderId) return; // Prevent duplicate payment/order submissions
+    const currentBill = bills.find(b => b.id === orderId);
+    if (currentBill?.status === 'Cancelled') {
+      setPaymentError(prev => ({ ...prev, [orderId]: 'This order has been cancelled and payment cannot be confirmed.' }));
+      return;
+    }
+
     setProcessingPaymentId(orderId);
     setPaymentError(prev => ({ ...prev, [orderId]: '' }));
 
@@ -84,6 +92,33 @@ const MyBill = () => {
       }));
     } finally {
       setProcessingPaymentId(null);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (cancellingOrderId || processingPaymentId) return;
+
+    if (!window.confirm('Are you sure you want to cancel this order?')) {
+      return;
+    }
+
+    setCancellingOrderId(orderId);
+    setPaymentError(prev => ({ ...prev, [orderId]: '' }));
+
+    try {
+      await modifyOrderStatus(orderId, 'Cancelled');
+      // Immediately remove from local state so it is no longer treated as an active unpaid bill in My Bill
+      setBills(prev => prev.filter(b => b.id !== orderId));
+      showNotification('Order has been cancelled.', 'info');
+      await loadBills();
+    } catch (err: any) {
+      console.error('Failed to cancel order:', err);
+      setPaymentError(prev => ({
+        ...prev,
+        [orderId]: err?.message || 'Failed to cancel order. Please try again.'
+      }));
+    } finally {
+      setCancellingOrderId(null);
     }
   };
 
@@ -125,7 +160,7 @@ const MyBill = () => {
                 </div>
                 <div className="sm:text-right">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total Due</p>
-                  <h3 className="text-3xl font-black text-primary tracking-tight">₱{bill.total}</h3>
+                  <h3 className="text-3xl font-black text-primary tracking-tight">{formatPrice(bill.total)}</h3>
                 </div>
               </div>
 
@@ -217,10 +252,10 @@ const MyBill = () => {
                       )}
                       <button 
                         onClick={() => handleConfirmOrder(bill.id)}
-                        disabled={!bill.paymentScreenshot || processingPaymentId === bill.id}
+                        disabled={!bill.paymentScreenshot || processingPaymentId === bill.id || cancellingOrderId === bill.id}
                         className={`
                           w-full py-3.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2
-                          ${bill.paymentScreenshot && processingPaymentId !== bill.id
+                          ${bill.paymentScreenshot && processingPaymentId !== bill.id && cancellingOrderId !== bill.id
                             ? 'bg-dark text-white hover:bg-primary active:translate-y-0.5 shadow-sm' 
                             : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'}
                           ${processingPaymentId === bill.id ? 'opacity-70 cursor-not-allowed' : ''}
@@ -235,6 +270,27 @@ const MyBill = () => {
                           <span>Confirm Payment</span>
                         )}
                       </button>
+
+                      {/* Cancel Order button directly beneath Confirm Payment */}
+                      <button
+                        type="button"
+                        onClick={() => handleCancelOrder(bill.id)}
+                        disabled={cancellingOrderId === bill.id || processingPaymentId === bill.id}
+                        className="w-full mt-2.5 py-3 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {cancellingOrderId === bill.id ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Cancelling Order...</span>
+                          </>
+                        ) : (
+                          <>
+                            <X size={14} />
+                            <span>Cancel Order</span>
+                          </>
+                        )}
+                      </button>
+
                       <p className="text-[10px] text-gray-400 font-medium text-center mt-2">Please double-check all details before confirming</p>
                     </div>
                   </div>

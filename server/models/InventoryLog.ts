@@ -4,7 +4,7 @@ export interface IInventoryLog extends Document {
   id: string;
   inventoryId: string;
   itemName: string;
-  type: 'stock-in' | 'stock-out' | 'order-deduction' | 'manual-adjustment';
+  type: 'stock-in' | 'stock-out' | 'order-deduction' | 'manual-adjustment' | 'order-cancellation-restock';
   quantityChange: number;
   remainingQuantity: number;
   reason?: string;
@@ -20,7 +20,7 @@ const InventoryLogSchema: Schema<IInventoryLog> = new Schema(
     itemName: { type: String, required: true },
     type: { 
       type: String, 
-      enum: ['stock-in', 'stock-out', 'order-deduction', 'manual-adjustment'], 
+      enum: ['stock-in', 'stock-out', 'order-deduction', 'manual-adjustment', 'order-cancellation-restock'], 
       required: true,
       index: true
     },

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
 import { AnimatePresence } from 'motion/react';
 import { X, Receipt as ReceiptIcon, Search } from 'lucide-react';
+import { formatPrice } from '../utils/format';
 
 const TransactionHistory = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
@@ -137,7 +138,7 @@ const TransactionHistory = () => {
                     </button>
                   )}
                   <div className="flex flex-col sm:items-end">
-                    <p className="text-base font-black text-dark">₱{order.total}</p>
+                    <p className="text-base font-black text-dark">{formatPrice(order.total)}</p>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{order.items.length} Item(s) • {order.paymentMethod}</p>
                   </div>
                 </div>
@@ -183,10 +184,10 @@ const TransactionHistory = () => {
                         </div>
                         <div className="flex-1">
                           <h4 className="font-bold text-dark text-xs">{item.name}</h4>
-                          <p className="text-[11px] text-gray-500">₱{item.price} x {item.quantity}</p>
+                          <p className="text-[11px] text-gray-500">{formatPrice(item.price)} x {item.quantity}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-dark text-xs">₱{item.price * item.quantity}</p>
+                          <p className="font-bold text-dark text-xs">{formatPrice(item.price * item.quantity)}</p>
                         </div>
                       </div>
                     ))}
@@ -208,7 +209,7 @@ const TransactionHistory = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Total Bill</p>
-                      <p className="text-xl font-black text-dark">₱{selectedOrder.total}</p>
+                      <p className="text-xl font-black text-dark">{formatPrice(selectedOrder.total)}</p>
                     </div>
                   </div>
                 </div>

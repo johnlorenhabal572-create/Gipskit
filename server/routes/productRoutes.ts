@@ -94,7 +94,7 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Forbidden: Admin or staff authorization required' });
     }
 
-    const { name, price, category, stock, image, inventoryLinkId, status, description } = req.body;
+    const { name, price, category, stock, image, inventoryLinkId, inventoryLinkIds, status, description } = req.body;
 
     // Validation
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -119,6 +119,10 @@ router.post('/', async (req: Request, res: Response) => {
       ? status 
       : 'Available';
 
+    const resolvedLinkIds: string[] = Array.isArray(inventoryLinkIds)
+      ? inventoryLinkIds.map(String).filter(Boolean)
+      : (inventoryLinkId ? [String(inventoryLinkId)] : []);
+
     const newId = req.body.id ? Number(req.body.id) : Date.now();
     const productPayload = {
       id: newId,
@@ -127,7 +131,8 @@ router.post('/', async (req: Request, res: Response) => {
       category: category.trim(),
       stock: parsedStock,
       image: image || '',
-      inventoryLinkId: inventoryLinkId || null,
+      inventoryLinkId: resolvedLinkIds[0] || null,
+      inventoryLinkIds: resolvedLinkIds,
       status: validStatus,
       description: description ? String(description).trim() : ''
     };
@@ -160,7 +165,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const rawId = req.params.id;
     const numericId = Number(rawId);
-    const { name, price, category, stock, image, inventoryLinkId, status, description } = req.body;
+    const { name, price, category, stock, image, inventoryLinkId, inventoryLinkIds, status, description } = req.body;
 
     const updates: any = {};
 
@@ -195,7 +200,13 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     if (image !== undefined) updates.image = image;
-    if (inventoryLinkId !== undefined) updates.inventoryLinkId = inventoryLinkId || null;
+    if (inventoryLinkIds !== undefined || inventoryLinkId !== undefined) {
+      const resolvedLinkIds: string[] = Array.isArray(inventoryLinkIds)
+        ? inventoryLinkIds.map(String).filter(Boolean)
+        : (inventoryLinkId ? [String(inventoryLinkId)] : []);
+      updates.inventoryLinkIds = resolvedLinkIds;
+      updates.inventoryLinkId = resolvedLinkIds[0] || null;
+    }
     if (status !== undefined) updates.status = status;
     if (description !== undefined) updates.description = String(description);
 
