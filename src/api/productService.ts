@@ -1,4 +1,4 @@
-import { getInventory } from './inventoryService';
+import { getInventory, fetchInventory } from './inventoryService';
 
 export const CATEGORIES = [
   "Soups",
@@ -90,41 +90,76 @@ export const fetchProducts = async (filters?: { category?: string; search?: stri
     if (filters?.availableOnly) params.append('availableOnly', 'true');
 
     const url = `/api/products${params.toString() ? `?${params.toString()}` : ''}`;
-    const res = await fetch(url, {
-      headers: getAuthHeaders()
-    });
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to fetch products: ${res.status}`);
+    // Concurrently fetch products and ensure inventory is fully loaded from backend
+    const [productsResult, inventoryResult] = await Promise.allSettled([
+      fetch(url, { headers: getAuthHeaders() }),
+      fetchInventory()
+    ]);
+
+    if (productsResult.status !== 'fulfilled' || !productsResult.value.ok) {
+      const errorData = productsResult.status === 'fulfilled'
+        ? await productsResult.value.json().catch(() => ({}))
+        : {};
+      const status = productsResult.status === 'fulfilled' ? productsResult.value.status : 'Network Error';
+      throw new Error(errorData.error || `Failed to fetch products: ${status}`);
     }
 
-    const data = await res.json();
-    cachedProducts = Array.isArray(data) ? data : [];
-    isCacheLoaded = true;
+    const data = await productsResult.value.json();
+    const rawProducts = Array.isArray(data) ? data : [];
 
-    // Merge inventory stock levels for linked items (if raw inventory exists)
-    const inventory = getInventory();
-    return cachedProducts.map((p: any) => {
+    // Determine inventory data availability
+    let inventoryList: any[] = [];
+    let isInventoryReady = false;
+
+    if (inventoryResult.status === 'fulfilled' && Array.isArray(inventoryResult.value)) {
+      inventoryList = inventoryResult.value;
+      isInventoryReady = true;
+    } else {
+      console.warn('Inventory fetch could not be fulfilled directly; checking inventory cache');
+      const cached = getInventory();
+      if (Array.isArray(cached) && cached.length > 0) {
+        inventoryList = cached;
+        isInventoryReady = true;
+      }
+    }
+
+    // Merge inventory stock levels for linked items
+    const mappedProducts = rawProducts.map((p: any) => {
       const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
         ? p.inventoryLinkIds
         : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
 
       if (linkIds.length > 0) {
-        const quantities = linkIds.map(id => {
-          const invItem = inventory.find((i: any) => i.id === id);
-          return invItem ? invItem.quantity : 0;
-        });
-        const availableStock = Math.min(...quantities);
-        return { 
-          ...p, 
-          stock: availableStock, 
-          inventoryLinkId: linkIds[0] || null, 
-          inventoryLinkIds: linkIds 
-        };
+        if (isInventoryReady) {
+          const quantities = linkIds.map(id => {
+            const invItem = inventoryList.find((i: any) => String(i.id) === String(id) || String(i._id) === String(id));
+            return invItem ? Number(invItem.quantity ?? 0) : 0;
+          });
+          const availableStock = Math.min(...quantities);
+          return { 
+            ...p, 
+            stock: availableStock, 
+            inventoryLinkId: linkIds[0] || null, 
+            inventoryLinkIds: linkIds 
+          };
+        } else {
+          // If inventory API failed and no cache is available, do not silently wipe stock to 0.
+          // Preserve existing product stock so items are not falsely displayed as Out of Stock.
+          return {
+            ...p,
+            inventoryLinkId: linkIds[0] || null,
+            inventoryLinkIds: linkIds
+          };
+        }
       }
       return p;
     });
+
+    cachedProducts = mappedProducts;
+    isCacheLoaded = true;
+
+    return mappedProducts;
   } catch (error) {
     console.error('Error in fetchProducts API:', error);
     // Return cached products if available
@@ -234,22 +269,31 @@ export const getProducts = () => {
   }
 
   const inventory = getInventory();
+  const hasInventory = Array.isArray(inventory) && inventory.length > 0;
+
   return cachedProducts.map((p: any) => {
     const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
       ? p.inventoryLinkIds
       : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
 
     if (linkIds.length > 0) {
-      const quantities = linkIds.map(id => {
-        const invItem = inventory.find((i: any) => i.id === id);
-        return invItem ? invItem.quantity : 0;
-      });
-      const availableStock = Math.min(...quantities);
-      return { 
-        ...p, 
-        stock: availableStock, 
-        inventoryLinkId: linkIds[0] || null, 
-        inventoryLinkIds: linkIds 
+      if (hasInventory) {
+        const quantities = linkIds.map(id => {
+          const invItem = inventory.find((i: any) => String(i.id) === String(id) || String(i._id) === String(id));
+          return invItem ? Number(invItem.quantity ?? 0) : 0;
+        });
+        const availableStock = Math.min(...quantities);
+        return { 
+          ...p, 
+          stock: availableStock, 
+          inventoryLinkId: linkIds[0] || null, 
+          inventoryLinkIds: linkIds 
+        };
+      }
+      return {
+        ...p,
+        inventoryLinkId: linkIds[0] || null,
+        inventoryLinkIds: linkIds
       };
     }
     return p;

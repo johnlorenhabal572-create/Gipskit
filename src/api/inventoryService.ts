@@ -20,32 +20,58 @@ export const getAuthHeaders = (): Record<string, string> => {
 // In-memory runtime cache (no localStorage dependency for permanent storage)
 let cachedInventory: any[] = [];
 let isCacheLoaded = false;
+let pendingInventoryPromise: Promise<any[]> | null = null;
 
 // 1. Fetch all inventory items from MongoDB Atlas via REST API
 export const fetchInventory = async (filters?: { search?: string; lowStock?: boolean }): Promise<any[]> => {
-  try {
-    const params = new URLSearchParams();
-    if (filters?.search) params.append('search', filters.search);
-    if (filters?.lowStock) params.append('lowStock', 'true');
+  const hasFilters = Boolean(filters?.search || filters?.lowStock);
 
-    const url = `/api/inventory${params.toString() ? `?${params.toString()}` : ''}`;
-    const res = await fetch(url, {
-      headers: getAuthHeaders()
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to fetch inventory: ${res.status}`);
-    }
-
-    const data = await res.json();
-    cachedInventory = Array.isArray(data) ? data : [];
-    isCacheLoaded = true;
-    return cachedInventory;
-  } catch (error) {
-    console.error('Error in fetchInventory API:', error);
-    return cachedInventory;
+  // If a request without filters is already in-flight, share the exact same promise
+  if (!hasFilters && pendingInventoryPromise) {
+    return pendingInventoryPromise;
   }
+
+  const promise = (async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.lowStock) params.append('lowStock', 'true');
+
+      const url = `/api/inventory${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(url, {
+        headers: getAuthHeaders()
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch inventory: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : [];
+      if (!hasFilters) {
+        cachedInventory = items;
+        isCacheLoaded = true;
+      }
+      return items;
+    } catch (error) {
+      console.error('Error in fetchInventory API:', error);
+      if (isCacheLoaded && Array.isArray(cachedInventory) && cachedInventory.length > 0) {
+        return cachedInventory;
+      }
+      throw error;
+    } finally {
+      if (!hasFilters) {
+        pendingInventoryPromise = null;
+      }
+    }
+  })();
+
+  if (!hasFilters) {
+    pendingInventoryPromise = promise;
+  }
+
+  return promise;
 };
 
 // 2. Fetch reorder items (low stock)
@@ -191,11 +217,13 @@ export const deleteInventoryItem = async (id: string): Promise<any> => {
 
 // Backward-compatible synchronous accessors
 export const getInventory = () => {
-  if (!isCacheLoaded) {
+  if (!isCacheLoaded && !pendingInventoryPromise) {
     fetchInventory().catch(console.error);
   }
   return cachedInventory;
 };
+
+export const isInventoryLoaded = () => isCacheLoaded;
 
 export const saveInventory = (items: any[]) => {
   cachedInventory = items;
