@@ -145,10 +145,22 @@ const ManageMenu = () => {
       ? formData.inventoryLinkIds
       : (formData.inventoryLinkId ? [formData.inventoryLinkId] : []);
 
+    let computedStock = 0;
+    if (linkIds.length > 0) {
+      const quantities = linkIds.map(id => {
+        const inv = inventory.find((i: any) => i.id === id);
+        return inv ? inv.quantity : 0;
+      });
+      computedStock = Math.min(...quantities);
+    }
+
+    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
+
     try {
       const newProd = await createProduct({
         ...formData,
-        stock: formData.stock || 0,
+        stock: computedStock,
+        status: effectiveStatus,
         inventoryLinkId: linkIds[0] || null,
         inventoryLinkIds: linkIds
       });
@@ -178,6 +190,17 @@ const ManageMenu = () => {
       ? product.inventoryLinkIds
       : (product.inventoryLinkId ? [product.inventoryLinkId] : []);
 
+    let computedStock = 0;
+    if (linkIds.length > 0) {
+      const quantities = linkIds.map(id => {
+        const inv = inventory.find((i: any) => i.id === id);
+        return inv ? inv.quantity : 0;
+      });
+      computedStock = Math.min(...quantities);
+    } else {
+      computedStock = product.stock || 0;
+    }
+
     setFormData({
       name: product.name,
       price: product.price,
@@ -185,8 +208,8 @@ const ManageMenu = () => {
       image: product.image,
       inventoryLinkId: linkIds[0] || '',
       inventoryLinkIds: linkIds,
-      stock: product.stock || 0,
-      status: product.status || 'Available',
+      stock: computedStock,
+      status: (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : (product.status || 'Available'),
       description: product.description || ''
     });
   };
@@ -206,9 +229,22 @@ const ManageMenu = () => {
       ? formData.inventoryLinkIds
       : (formData.inventoryLinkId ? [formData.inventoryLinkId] : []);
 
+    let computedStock = 0;
+    if (linkIds.length > 0) {
+      const quantities = linkIds.map(id => {
+        const inv = inventory.find((i: any) => i.id === id);
+        return inv ? inv.quantity : 0;
+      });
+      computedStock = Math.min(...quantities);
+    }
+
+    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
+
     const updated = { 
       ...formData, 
       id: editingId,
+      stock: computedStock,
+      status: effectiveStatus,
       inventoryLinkId: linkIds[0] || null,
       inventoryLinkIds: linkIds
     };
@@ -568,42 +604,12 @@ const ManageMenu = () => {
                       {formData.inventoryLinkIds.length > 0 && (
                         <button 
                           type="button" 
-                          onClick={() => setFormData({...formData, inventoryLinkIds: [], inventoryLinkId: ''})}
+                          onClick={() => setFormData({...formData, inventoryLinkIds: [], inventoryLinkId: '', stock: 0})}
                           className="text-[10px] font-bold text-red-600 hover:underline"
                         >
                           Clear all ({formData.inventoryLinkIds.length})
                         </button>
                       )}
-                    </div>
-
-                    {/* Quick selection dropdown to add item */}
-                    <div className="relative">
-                      <select 
-                        value=""
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (!val) return;
-                          if (!formData.inventoryLinkIds.includes(val)) {
-                            const next = [...formData.inventoryLinkIds, val];
-                            setFormData({
-                              ...formData,
-                              inventoryLinkIds: next,
-                              inventoryLinkId: next[0]
-                            });
-                          }
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white text-dark font-medium cursor-pointer"
-                      >
-                        <option value="">+ Select inventory item to link...</option>
-                        {inventory.map((item, idx) => {
-                          const isSelected = formData.inventoryLinkIds.includes(item.id);
-                          return (
-                            <option key={item.id ? `opt-${item.id}` : `opt-${idx}`} value={item.id} disabled={isSelected}>
-                              {isSelected ? '✓ ' : ''}{item.name} ({item.quantity} {item.unit} available)
-                            </option>
-                          );
-                        })}
-                      </select>
                     </div>
 
                     {/* Scrollable multi-select checkbox list of all inventory items */}
@@ -626,10 +632,18 @@ const ManageMenu = () => {
                                     const next = isChecked
                                       ? formData.inventoryLinkIds.filter(id => id !== item.id)
                                       : [...formData.inventoryLinkIds, item.id];
+                                    const nextStock = next.length > 0
+                                      ? Math.min(...next.map(id => {
+                                          const inv = inventory.find((i: any) => i.id === id);
+                                          return inv ? inv.quantity : 0;
+                                        }))
+                                      : 0;
                                     setFormData({
                                       ...formData,
                                       inventoryLinkIds: next,
-                                      inventoryLinkId: next[0] || ''
+                                      inventoryLinkId: next[0] || '',
+                                      stock: nextStock,
+                                      status: (next.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
                                     });
                                   }}
                                   className="rounded border-gray-300 text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
@@ -670,7 +684,19 @@ const ManageMenu = () => {
                                   type="button"
                                   onClick={() => {
                                     const next = formData.inventoryLinkIds.filter(i => i !== id);
-                                    setFormData({ ...formData, inventoryLinkIds: next, inventoryLinkId: next[0] || '' });
+                                    const nextStock = next.length > 0
+                                      ? Math.min(...next.map(linkId => {
+                                          const invItem = inventory.find((i: any) => i.id === linkId);
+                                          return invItem ? invItem.quantity : 0;
+                                        }))
+                                      : 0;
+                                    setFormData({ 
+                                      ...formData, 
+                                      inventoryLinkIds: next, 
+                                      inventoryLinkId: next[0] || '',
+                                      stock: nextStock,
+                                      status: (next.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
+                                    });
                                   }}
                                   className="text-gray-400 hover:text-red-600 transition-colors"
                                   title="Remove link"
@@ -684,24 +710,10 @@ const ManageMenu = () => {
                       </div>
                     ) : (
                       <p className="text-[10px] text-gray-500 italic">
-                        No inventory linked. Dish stock will be managed manually below.
+                        No inventory linked.
                       </p>
                     )}
                   </div>
-
-                  {formData.inventoryLinkIds.length === 0 && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Available Quantity (Manual)</label>
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={formData.stock}
-                        onChange={(e) => setFormData({...formData, stock: parseInt(e.target.value) || 0})}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark"
-                        placeholder="Current stock level"
-                      />
-                    </div>
-                  )}
 
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Availability Status</label>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders } from '../api/orderService';
 import { fetchInventory } from '../api/inventoryService';
+import { formatPrice } from '../utils/format';
 import { 
   BarChart, 
   Bar, 
@@ -125,9 +126,9 @@ const Dashboard = () => {
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
                 {reportPeriod === 'daily' ? "Today's Sales" : "Lifetime Sales"}
               </p>
-              <h3 className="text-2xl font-black text-dark tracking-tight">₱{headlineSales.toLocaleString()}</h3>
+              <h3 className="text-2xl font-black text-dark tracking-tight">{formatPrice(headlineSales)}</h3>
               {reportPeriod === 'daily' && (
-                <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Overall: ₱{lifetimeSales.toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Overall: {formatPrice(lifetimeSales)}</p>
               )}
             </div>
             <div className="w-10 h-10 bg-green-50 text-green-700 border border-green-200 rounded-lg flex items-center justify-center">

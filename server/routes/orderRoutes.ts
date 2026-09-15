@@ -14,6 +14,50 @@ function getUserEmail(req: Request): string {
   return (req.headers['x-user-email'] as string) || '';
 }
 
+// Normalizes order email so customer.email is consistently set for registered users
+function normalizeOrderEmail(order: any): any {
+  if (!order) return order;
+  const rawCustomerEmail = (order.customer?.email || '').trim();
+  const rawUserEmail = (order.userEmail || '').trim();
+  
+  const validEmail = (rawCustomerEmail && rawCustomerEmail !== 'anonymous')
+    ? rawCustomerEmail
+    : ((rawUserEmail && rawUserEmail !== 'anonymous') ? rawUserEmail : '');
+
+  return {
+    ...order,
+    customer: {
+      ...order.customer,
+      email: validEmail || ''
+    },
+    userEmail: validEmail || (rawUserEmail !== 'anonymous' ? rawUserEmail : '')
+  };
+}
+
+let hasBackfilledOrders = false;
+async function backfillExistingOrderEmails() {
+  if (hasBackfilledOrders) return;
+  hasBackfilledOrders = true;
+  try {
+    const candidates = await Order.find({
+      $or: [
+        { 'customer.email': '' },
+        { 'customer.email': null },
+        { 'customer.email': { $exists: false } }
+      ],
+      userEmail: { $exists: true, $ne: '', $nin: ['anonymous', 'system'] }
+    });
+    for (const ord of candidates) {
+      if (ord.userEmail && ord.userEmail.includes('@')) {
+        ord.customer.email = ord.userEmail.trim();
+        await ord.save();
+      }
+    }
+  } catch (err) {
+    console.warn('Backfill existing order emails check:', err);
+  }
+}
+
 // 1. GET /api/orders - Get all orders or filter
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -21,12 +65,13 @@ router.get('/', async (req: Request, res: Response) => {
     const { status, email, orderType, search } = req.query;
 
     if (isConnected) {
+      backfillExistingOrderEmails().catch(() => {});
       const query: any = {};
       if (status && status !== 'All') {
         query.status = status;
       }
       if (email) {
-        query.userEmail = email;
+        query.$or = [{ userEmail: email }, { 'customer.email': email }];
       }
       if (orderType) {
         query.orderType = orderType;
@@ -36,12 +81,14 @@ router.get('/', async (req: Request, res: Response) => {
         query.$or = [
           { id: searchRegex },
           { 'customer.name': searchRegex },
+          { 'customer.email': searchRegex },
+          { userEmail: searchRegex },
           { 'customer.phone': searchRegex }
         ];
       }
 
       const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
-      return res.json(orders);
+      return res.json(orders.map(normalizeOrderEmail));
     }
 
     // In-memory fallback
@@ -50,7 +97,7 @@ router.get('/', async (req: Request, res: Response) => {
       list = list.filter(o => o.status === status);
     }
     if (email) {
-      list = list.filter(o => o.userEmail === email);
+      list = list.filter(o => o.userEmail === email || o.customer?.email === email);
     }
     if (orderType) {
       list = list.filter(o => o.orderType === orderType);
@@ -60,12 +107,14 @@ router.get('/', async (req: Request, res: Response) => {
       list = list.filter(o => 
         o.id?.toLowerCase().includes(s) || 
         o.customer?.name?.toLowerCase().includes(s) ||
+        o.customer?.email?.toLowerCase().includes(s) ||
+        o.userEmail?.toLowerCase().includes(s) ||
         o.customer?.phone?.toLowerCase().includes(s)
       );
     }
 
     list.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
-    return res.json(list);
+    return res.json(list.map(normalizeOrderEmail));
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({ error: 'Failed to fetch orders' });
@@ -200,14 +249,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
       }
-      return res.json(order);
+      return res.json(normalizeOrderEmail(order));
     }
 
     const order = memoryStore.orders.find(o => o.id === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    return res.json(order);
+    return res.json(normalizeOrderEmail(order));
   } catch (error) {
     console.error('Error fetching order:', error);
     res.status(500).json({ error: 'Failed to fetch order' });
@@ -230,18 +279,23 @@ router.post('/', async (req: Request, res: Response) => {
     const finalStatus = status || (finalOrderType === 'POS' ? 'Completed' : 'Pending');
     const finalPaymentStatus = paymentStatus || (finalStatus === 'Completed' ? 'Paid' : 'Unpaid');
 
-    const performerEmail = getUserEmail(req) || userEmail || 'system';
+    const headerEmail = getUserEmail(req);
+    const resolvedEmail = (customer?.email && customer.email !== 'anonymous' ? customer.email.trim() : '') ||
+                          (userEmail && userEmail !== 'anonymous' ? userEmail.trim() : '') ||
+                          (headerEmail && headerEmail !== 'system' && headerEmail !== 'anonymous' ? headerEmail.trim() : '');
+
+    const performerEmail = headerEmail || resolvedEmail || 'system';
 
     const orderDoc = {
       id: orderId,
       customer: {
-        name: customer?.name || 'Walk-in Customer',
-        email: customer?.email || '',
+        name: customer?.name || userName || 'Walk-in Customer',
+        email: resolvedEmail,
         phone: customer?.phone || '',
         address: customer?.address || '',
         facebook: customer?.facebook || ''
       },
-      userEmail: userEmail || '',
+      userEmail: resolvedEmail,
       userName: userName || customer?.name || '',
       items: items.map(item => {
         const linkIds: string[] = Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0

@@ -335,7 +335,7 @@ const POS = () => {
                     <div>
                       <p className="text-xs font-bold text-dark line-clamp-1 mb-1">{product.name}</p>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-primary font-black text-sm">₱{Number(product.price).toFixed(2)}</span>
+                        <span className="text-primary font-black text-sm">{formatPrice(product.price)}</span>
                         <span className={`text-[10px] font-bold uppercase ${product.stock <= 5 ? 'text-red-600' : 'text-gray-400'}`}>
                           {product.stock} left
                         </span>
@@ -450,7 +450,7 @@ const POS = () => {
                 <div key={item.id} className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-dark truncate">{item.name}</p>
-                    <p className="text-[10px] text-primary font-bold">₱{Number(item.price).toFixed(2)}</p>
+                    <p className="text-[10px] text-primary font-bold">{formatPrice(item.price)}</p>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -470,7 +470,7 @@ const POS = () => {
                   </div>
 
                   <div className="text-right shrink-0 min-w-[55px]">
-                    <p className="text-xs font-bold text-dark">₱{(item.price * item.quantity).toFixed(2)}</p>
+                    <p className="text-xs font-bold text-dark">{formatPrice(item.price * item.quantity)}</p>
                     <button 
                       onClick={() => removeFromPosCart(item.id)}
                       className="text-[10px] text-red-600 hover:underline font-medium"
@@ -488,11 +488,11 @@ const POS = () => {
             <div className="space-y-1 text-xs">
               <div className="flex justify-between text-gray-500 font-medium">
                 <span>Subtotal</span>
-                <span>₱{subtotal.toFixed(2)}</span>
+                <span>{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center text-dark pt-1.5 border-t border-gray-200">
                 <span className="text-xs font-bold uppercase tracking-wider">Total Due</span>
-                <span className="text-xl font-black text-primary">₱{total.toFixed(2)}</span>
+                <span className="text-xl font-black text-primary">{formatPrice(total)}</span>
               </div>
             </div>
 
@@ -510,7 +510,7 @@ const POS = () => {
                 className="col-span-2 py-2.5 bg-dark text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors flex items-center justify-center gap-1.5 active:translate-y-0.5 disabled:opacity-40"
               >
                 <CreditCard size={15} />
-                <span>Pay ₱{total.toFixed(2)}</span>
+                <span>Pay {formatPrice(total)}</span>
               </button>
             </div>
           </div>
@@ -527,7 +527,7 @@ const POS = () => {
               <div className="flex justify-between items-center mb-5">
                 <div>
                   <h3 className="text-lg font-black text-dark tracking-tight">Select Payment</h3>
-                  <p className="text-xs text-gray-500">Total Payable: <strong>₱{total.toFixed(2)}</strong></p>
+                  <p className="text-xs text-gray-500">Total Payable: <strong>{formatPrice(total)}</strong></p>
                 </div>
                 <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 text-gray-400 hover:text-dark">
                   <XCircle size={20} />
@@ -585,7 +585,7 @@ const POS = () => {
                         onClick={() => setAmountPaidInput(val.toString())}
                         className="px-2.5 py-1 bg-white border border-gray-300 text-gray-700 hover:border-dark hover:text-dark rounded text-xs font-bold transition-colors"
                       >
-                        {val === total ? 'Exact' : `₱${val}`}
+                        {val === total ? 'Exact' : formatPrice(val)}
                       </button>
                     ))}
                   </div>
@@ -594,7 +594,7 @@ const POS = () => {
                   <div className="pt-2.5 border-t border-gray-200 flex justify-between items-center">
                     <span className="text-xs font-bold uppercase text-gray-500">Change Due:</span>
                     <span className={`text-lg font-black ${parsedAmountPaid >= total ? 'text-green-700' : 'text-red-600'}`}>
-                      ₱{change.toFixed(2)}
+                      {formatPrice(change)}
                     </span>
                   </div>
                   {parsedAmountPaid < total && (
@@ -657,7 +657,7 @@ const POS = () => {
                 {completedOrder.items.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center text-dark">
                     <span>{item.quantity}x {item.name}</span>
-                    <span className="font-bold">₱{(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="font-bold">{formatPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
@@ -665,7 +665,7 @@ const POS = () => {
               <div className="py-2.5 space-y-1 border-b border-dashed border-gray-300">
                 <div className="flex justify-between font-bold text-dark">
                   <span>Grand Total:</span>
-                  <span>₱{Number(completedOrder.total).toFixed(2)}</span>
+                  <span>{formatPrice(completedOrder.total)}</span>
                 </div>
                 <div className="flex justify-between text-gray-500">
                   <span>Payment Method:</span>
@@ -675,11 +675,11 @@ const POS = () => {
                   <>
                     <div className="flex justify-between text-gray-500">
                       <span>Amount Paid:</span>
-                      <span>₱{Number(completedOrder.amountPaid).toFixed(2)}</span>
+                      <span>{formatPrice(completedOrder.amountPaid)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-green-700">
                       <span>Change:</span>
-                      <span>₱{Number(completedOrder.change || 0).toFixed(2)}</span>
+                      <span>{formatPrice(completedOrder.change || 0)}</span>
                     </div>
                   </>
                 )}
@@ -724,7 +724,7 @@ const POS = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Sales Today</p>
-                      <p className="text-xl font-black text-primary mt-0.5">₱{Number(shiftReportData.totalRevenue || 0).toFixed(2)}</p>
+                      <p className="text-xl font-black text-primary mt-0.5">{formatPrice(shiftReportData.totalRevenue || 0)}</p>
                     </div>
                     <div className="p-3.5 bg-gray-50 rounded-lg border border-gray-200">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Transactions</p>
@@ -737,7 +737,7 @@ const POS = () => {
                     {Object.entries(shiftReportData.paymentMethods || {}).map(([method, amt]: any) => (
                       <div key={method} className="flex justify-between text-xs font-bold text-dark">
                         <span>{method}</span>
-                        <span>₱{Number(amt).toFixed(2)}</span>
+                        <span>{formatPrice(amt)}</span>
                       </div>
                     ))}
                     {Object.keys(shiftReportData.paymentMethods || {}).length === 0 && (

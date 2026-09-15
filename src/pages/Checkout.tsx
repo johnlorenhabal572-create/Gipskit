@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { CartContext } from '../context/CartContext';
 import { createOrder } from '../api/orderService';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,12 @@ const Checkout = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (user?.name && !formData.name) {
+      setFormData(prev => ({ ...prev, name: user.name }));
+    }
+  }, [user]);
+
   const handleChange = (e: any) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -28,10 +34,18 @@ const Checkout = () => {
 
     setIsSubmitting(true);
     try {
+      const customerEmail = user?.email?.trim() || '';
+      const customerName = formData.name.trim() || user?.name || 'Customer';
+
       const orderDetails = {
-        customer: formData,
-        userEmail: user ? user.email : 'anonymous',
-        userName: user ? user.name : formData.name,
+        customer: {
+          name: customerName,
+          phone: formData.phone.trim(),
+          email: customerEmail,
+          paymentMethod: formData.paymentMethod
+        },
+        userEmail: customerEmail,
+        userName: customerName,
         items: [...cart],
         total: getCartTotal(),
         date: new Date().toISOString(),

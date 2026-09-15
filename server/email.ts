@@ -1,4 +1,5 @@
 import { BrevoClient } from '@getbrevo/brevo';
+import { formatPrice } from '../src/utils/format';
 
 let brevoClient: BrevoClient | null = null;
 let cachedApiKey: string | undefined = undefined;
@@ -262,7 +263,7 @@ export async function sendOrderStatusEmail(
   const customerName = order.customer?.name || order.userName || 'Valued Customer';
   const orderId = order.id;
   const items = Array.isArray(order.items) ? order.items : [];
-  const totalAmount = Number(order.total || 0).toFixed(2);
+  const formattedTotal = formatPrice(order.total || 0);
 
   const itemsHtml = items.map((item: any) => `
     <tr>
@@ -271,13 +272,13 @@ export async function sendOrderStatusEmail(
         <span style="color: #64748b; font-weight: normal; font-size: 13px;"> × ${item.quantity || 1}</span>
       </td>
       <td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 14px; font-weight: 700; text-align: right;">
-        ₱${((Number(item.price) || 0) * (Number(item.quantity) || 1)).toFixed(2)}
+        ${formatPrice((Number(item.price) || 0) * (Number(item.quantity) || 1))}
       </td>
     </tr>
   `).join('');
 
   const itemsText = items.map((item: any) => 
-    `- ${item.name || 'Item'} x${item.quantity || 1}: ₱${((Number(item.price) || 0) * (Number(item.quantity) || 1)).toFixed(2)}`
+    `- ${item.name || 'Item'} x${item.quantity || 1}: ${formatPrice((Number(item.price) || 0) * (Number(item.quantity) || 1))}`
   ).join('\n');
 
   let emailSubject = '';
@@ -384,7 +385,7 @@ export async function sendOrderStatusEmail(
 
             <div style="border-top: 2px solid #e2e8f0; padding-top: 10px; text-align: right;">
               <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; margin-right: 12px;">Total Amount</span>
-              <span style="font-size: 20px; font-weight: 900; color: #0f172a;">₱${totalAmount}</span>
+              <span style="font-size: 20px; font-weight: 900; color: #0f172a;">${formattedTotal}</span>
             </div>
           </div>
 
@@ -406,7 +407,7 @@ export async function sendOrderStatusEmail(
     </html>
   `;
 
-  const textContent = `GIP'S KITCHEN - ORDER STATUS NOTIFICATION\n\n${statusHeadline}\n\nHi ${customerName},\n${statusTextSummary}\n\nORDER DETAILS (#${orderId}):\n${itemsText}\nTotal: ₱${totalAmount}\n\nThank you for ordering with Gip's Kitchen!`;
+  const textContent = `GIP'S KITCHEN - ORDER STATUS NOTIFICATION\n\n${statusHeadline}\n\nHi ${customerName},\n${statusTextSummary}\n\nORDER DETAILS (#${orderId}):\n${itemsText}\nTotal: ${formattedTotal}\n\nThank you for ordering with Gip's Kitchen!`;
 
   try {
     const startTime = Date.now();

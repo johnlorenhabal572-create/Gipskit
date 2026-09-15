@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders, fetchProductAnalysis } from '../api/orderService';
+import { fetchProducts } from '../api/productService';
+import { formatPrice } from '../utils/format';
 import { 
   Calendar, TrendingUp, ShoppingBag, DollarSign, ChevronLeft, ChevronRight,
   BarChart2, Award, AlertCircle, RefreshCw, Layers
@@ -7,17 +9,20 @@ import {
 
 const SalesReport = () => {
   const [orders, setOrders] = useState<any[]>([]);
+  const [menuProducts, setMenuProducts] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState<'transactions' | 'product-analysis'>('transactions');
 
   const loadData = async () => {
     try {
-      const [orderList] = await Promise.all([
+      const [orderList, productList] = await Promise.all([
         fetchOrders({ status: 'Completed' }),
+        fetchProducts(),
         fetchProductAnalysis()
       ]);
       setOrders(orderList || []);
+      setMenuProducts(productList || []);
     } catch (err) {
       console.error('Failed to load sales report data:', err);
     }
@@ -57,12 +62,12 @@ const SalesReport = () => {
   const orderCount = filteredOrders.length;
   const avgOrderValue = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
 
-  // Period product sales aggregation
+  // Period product sales aggregation from completed orders
   const periodProductSales: { [key: string]: { name: string; quantity: number; revenue: number; category?: string } } = {};
   filteredOrders.forEach(order => {
     if (Array.isArray(order.items)) {
       order.items.forEach((item: any) => {
-        const name = item.name || 'Unknown';
+        const name = (item.name || 'Unknown').trim();
         if (!periodProductSales[name]) {
           periodProductSales[name] = {
             name,
@@ -79,9 +84,83 @@ const SalesReport = () => {
     }
   });
 
-  const sortedPeriodProducts = Object.values(periodProductSales).sort((a, b) => b.quantity - a.quantity);
-  const bestSellersPeriod = sortedPeriodProducts.slice(0, 5);
-  const leastSellersPeriod = [...sortedPeriodProducts].reverse().slice(0, 5);
+  // Products with recorded sales during the selected period
+  const sortedPeriodProducts = Object.values(periodProductSales)
+    .filter(p => p.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue);
+
+  // Combine menu products to account for items with 0 sales
+  const allPeriodProductsMap: { [key: string]: { name: string; quantity: number; revenue: number; category?: string } } = {};
+
+  // 1. Register menu products (defaulting to 0 sales for this period)
+  menuProducts.forEach(prod => {
+    const name = prod.name?.trim();
+    if (name) {
+      allPeriodProductsMap[name.toLowerCase()] = {
+        name,
+        quantity: 0,
+        revenue: 0,
+        category: prod.category || 'General'
+      };
+    }
+  });
+
+  // 2. Overlay actual sales from completed orders in this period
+  Object.values(periodProductSales).forEach(sold => {
+    const key = sold.name.toLowerCase();
+    allPeriodProductsMap[key] = {
+      name: sold.name,
+      quantity: sold.quantity,
+      revenue: sold.revenue,
+      category: sold.category || allPeriodProductsMap[key]?.category || 'General'
+    };
+  });
+
+  const allPeriodProductsList = Object.values(allPeriodProductsMap);
+  const productsWithSales = allPeriodProductsList
+    .filter(p => p.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue);
+  const productsWithZeroSales = allPeriodProductsList
+    .filter(p => p.quantity === 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Determine Best-Selling and Least-Selling Products
+  let bestSellersPeriod: { name: string; quantity: number; revenue: number; category?: string }[] = [];
+  let leastSellersPeriod: { name: string; quantity: number; revenue: number; category?: string }[] = [];
+  let isSingleProductNoComparison = false;
+
+  if (productsWithSales.length > 0) {
+    if (productsWithZeroSales.length > 0) {
+      // Products with sales exist alongside 0-sales menu products:
+      // Best-Selling: Top performers with sales (up to 5)
+      bestSellersPeriod = productsWithSales.slice(0, 5);
+      const bestSellerNames = new Set(bestSellersPeriod.map(p => p.name.toLowerCase()));
+
+      // Least-Selling: Menu items with 0 sales and low-velocity products, strictly excluding best sellers
+      leastSellersPeriod = allPeriodProductsList
+        .filter(p => !bestSellerNames.has(p.name.toLowerCase()))
+        .sort((a, b) => a.quantity - b.quantity || a.revenue - b.revenue || a.name.localeCompare(b.name))
+        .slice(0, 5);
+    } else {
+      // All catalog products have sales (no 0-sales items)
+      if (productsWithSales.length === 1) {
+        // Only one product has recorded sales during this period and no other products exist
+        bestSellersPeriod = productsWithSales.slice(0, 1);
+        leastSellersPeriod = [];
+        isSingleProductNoComparison = true;
+      } else {
+        // Multiple products with sales: partition so top and bottom don't overlap unless genuinely required
+        const bestCount = Math.min(5, Math.max(1, Math.floor(productsWithSales.length / 2)));
+        bestSellersPeriod = productsWithSales.slice(0, bestCount);
+        const bestSellerNames = new Set(bestSellersPeriod.map(p => p.name.toLowerCase()));
+
+        leastSellersPeriod = productsWithSales
+          .filter(p => !bestSellerNames.has(p.name.toLowerCase()))
+          .sort((a, b) => a.quantity - b.quantity || a.revenue - b.revenue)
+          .slice(0, 5);
+      }
+    }
+  }
 
   const changePeriod = (delta: number) => {
     const newDate = new Date(selectedDate);
@@ -185,7 +264,7 @@ const SalesReport = () => {
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">
                 {filterType === 'day' ? 'Daily' : filterType === 'week' ? 'Weekly' : filterType === 'month' ? 'Monthly' : 'Annual'} Revenue
               </p>
-              <h3 className="text-2xl font-black text-dark tracking-tight">₱{totalSales.toLocaleString()}</h3>
+              <h3 className="text-2xl font-black text-dark tracking-tight">{formatPrice(totalSales)}</h3>
               <p className="text-[11px] text-green-700 font-bold mt-1 flex items-center gap-1">
                 <TrendingUp size={12} /> Completed payments
               </p>
@@ -211,7 +290,7 @@ const SalesReport = () => {
           <div className="bg-white p-5 rounded-xl border border-gray-200 flex items-center justify-between">
             <div>
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Average Order Value</p>
-              <h3 className="text-2xl font-black text-dark tracking-tight">₱{avgOrderValue.toLocaleString()}</h3>
+              <h3 className="text-2xl font-black text-dark tracking-tight">{formatPrice(avgOrderValue)}</h3>
               <p className="text-[11px] text-gray-600 font-bold mt-1 flex items-center gap-1">
                 <Layers size={12} /> Per customer ticket
               </p>
@@ -254,7 +333,7 @@ const SalesReport = () => {
                 <h2 className="text-xs font-bold text-dark uppercase tracking-wider">Completed Orders ({getPeriodLabel()})</h2>
               </div>
               <span className="bg-gray-200 text-dark px-2.5 py-0.5 rounded text-xs font-bold border border-gray-300">
-                ₱{totalSales.toLocaleString()} Total
+                {formatPrice(totalSales)} Total
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -300,7 +379,7 @@ const SalesReport = () => {
                           </div>
                         </td>
                         <td className="p-3.5 text-right font-black text-dark text-xs">
-                          ₱{Number(order.total).toLocaleString()}
+                          {formatPrice(order.total)}
                         </td>
                       </tr>
                     ))
@@ -344,7 +423,7 @@ const SalesReport = () => {
                             <p className="text-[10px] text-gray-500">{prod.quantity} units sold</p>
                           </div>
                         </div>
-                        <span className="text-xs font-bold text-dark">₱{prod.revenue.toLocaleString()}</span>
+                        <span className="text-xs font-bold text-dark">{formatPrice(prod.revenue)}</span>
                       </div>
                     ))}
                   </div>
@@ -364,7 +443,11 @@ const SalesReport = () => {
                 </div>
 
                 {leastSellersPeriod.length === 0 ? (
-                  <p className="text-center py-6 text-xs text-gray-400 font-medium">No data available.</p>
+                  <p className="text-center py-6 text-xs text-gray-400 font-medium px-4">
+                    {isSingleProductNoComparison 
+                      ? 'No comparison available — only one product has recorded sales during this period.' 
+                      : 'No data available.'}
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {leastSellersPeriod.map((prod) => (
@@ -373,7 +456,7 @@ const SalesReport = () => {
                           <p className="text-xs font-bold text-dark">{prod.name}</p>
                           <p className="text-[10px] text-gray-500">{prod.quantity} units sold</p>
                         </div>
-                        <span className="text-xs font-bold text-gray-600">₱{prod.revenue.toLocaleString()}</span>
+                        <span className="text-xs font-bold text-gray-600">{formatPrice(prod.revenue)}</span>
                       </div>
                     ))}
                   </div>
@@ -385,15 +468,21 @@ const SalesReport = () => {
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="text-xs font-bold text-dark uppercase tracking-wider mb-3">Full Quantity Sold Breakdown</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                {sortedPeriodProducts.map((p) => (
-                  <div key={p.name} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
-                    <div>
-                      <p className="text-xs font-bold text-dark truncate max-w-[150px]">{p.name}</p>
-                      <p className="text-[10px] text-gray-500">Qty: {p.quantity}</p>
+                {sortedPeriodProducts.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-medium py-4 text-center col-span-full">
+                    No product sales in this period.
+                  </p>
+                ) : (
+                  sortedPeriodProducts.map((p) => (
+                    <div key={p.name} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <p className="text-xs font-bold text-dark truncate max-w-[150px]">{p.name}</p>
+                        <p className="text-[10px] text-gray-500">Qty: {p.quantity}</p>
+                      </div>
+                      <span className="text-xs font-bold text-dark">{formatPrice(p.revenue)}</span>
                     </div>
-                    <span className="text-xs font-bold text-dark">₱{p.revenue.toLocaleString()}</span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

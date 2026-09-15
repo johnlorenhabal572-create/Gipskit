@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { useNotifications } from '../context/NotificationContext';
-import { X, Eye } from 'lucide-react';
+import { X, Eye, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
 
@@ -11,6 +11,7 @@ const AdminDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('Pending');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [updatingOrders, setUpdatingOrders] = useState<Record<string, string>>({});
   const { markAdminOrdersAsRead } = useNotifications();
   const hasMarkedReadRef = useRef(false);
 
@@ -41,41 +42,69 @@ const AdminDashboard = () => {
   }, []);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    if (updatingOrders[orderId]) return;
+
     // If order is already cancelled, don't allow proceeding to another status
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder?.status === 'Cancelled') {
       alert('This order has been cancelled and cannot proceed to another status.');
       return;
     }
-    // Optimistic UI update
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-    await modifyOrderStatus(orderId, newStatus);
-    await loadOrders();
+
+    setUpdatingOrders(prev => ({ ...prev, [orderId]: newStatus }));
+
+    try {
+      await modifyOrderStatus(orderId, newStatus);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      await loadOrders();
+    } catch (err: any) {
+      console.error('Failed to update status:', err);
+      alert(err?.message || 'Failed to update order status.');
+      await loadOrders();
+    } finally {
+      setUpdatingOrders(prev => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+    }
   };
 
   const handleCancelPendingOrder = async (orderId: string) => {
+    if (updatingOrders[orderId]) return;
+
     if (!window.confirm(`Are you sure you want to cancel order ${orderId}?`)) {
       return;
     }
-    // Optimistic UI update
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
+    setUpdatingOrders(prev => ({ ...prev, [orderId]: 'Cancelled' }));
     try {
       await modifyOrderStatus(orderId, 'Cancelled');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
       await loadOrders();
     } catch (err: any) {
       console.error('Failed to cancel order:', err);
       alert(err?.message || 'Failed to cancel order.');
       await loadOrders();
+    } finally {
+      setUpdatingOrders(prev => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
     }
   };
 
   const filteredOrders = orders.filter(order => {
     const searchLower = searchTerm.toLowerCase();
+    const customerEmail = (order.customer?.email && order.customer.email !== 'anonymous')
+      ? order.customer.email
+      : (order.userEmail && order.userEmail !== 'anonymous' ? order.userEmail : '');
+
     const matchesSearch = 
       order.id.toLowerCase().includes(searchLower) || 
-      order.customer.name.toLowerCase().includes(searchLower) ||
-      (order.customer.email && order.customer.email.toLowerCase().includes(searchLower)) ||
-      (order.customer.phone && order.customer.phone.toLowerCase().includes(searchLower));
+      (order.customer?.name && order.customer.name.toLowerCase().includes(searchLower)) ||
+      (customerEmail && customerEmail.toLowerCase().includes(searchLower)) ||
+      (order.customer?.phone && order.customer.phone.toLowerCase().includes(searchLower));
       
     const matchesStatus = filterStatus === 'All' 
       || order.status === filterStatus
@@ -190,7 +219,11 @@ const AdminDashboard = () => {
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Customer Email</p>
-                          <p className="text-xs font-bold text-dark truncate">{order.customer?.email || 'N/A'}</p>
+                          <p className="text-xs font-bold text-dark truncate">
+                            {(order.customer?.email && order.customer.email !== 'anonymous' && order.customer.email.trim() !== '')
+                              ? order.customer.email
+                              : ((order.userEmail && order.userEmail !== 'anonymous' && order.userEmail.trim() !== '') ? order.userEmail : 'N/A')}
+                          </p>
                         </div>
                       </div>
 
@@ -253,55 +286,106 @@ const AdminDashboard = () => {
                           </div>
                           <button 
                             type="button"
+                            id={`btn-cancel-pending-${order.id}`}
+                            disabled={Boolean(updatingOrders[order.id])}
                             onClick={() => handleCancelPendingOrder(order.id)}
-                            className="bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors text-center flex items-center justify-center gap-1.5 shadow-sm active:translate-y-0.5"
+                            className="bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors text-center flex items-center justify-center gap-1.5 shadow-sm active:translate-y-0.5 disabled:opacity-50"
                           >
-                            <X size={13} />
-                            <span>Cancel Order</span>
+                            {updatingOrders[order.id] === 'Cancelled' ? (
+                              <>
+                                <RefreshCw size={13} className="animate-spin" />
+                                <span>Cancelling...</span>
+                              </>
+                            ) : (
+                              <>
+                                <X size={13} />
+                                <span>Cancel Order</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       )}
                       {order.status === 'Paid' && (
                         <button 
+                          id={`btn-process-order-${order.id}`}
+                          disabled={Boolean(updatingOrders[order.id])}
                           onClick={() => handleStatusChange(order.id, 'Processing')}
-                          className="bg-dark text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors text-center"
+                          className="bg-dark text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
-                          Process Order
+                          {updatingOrders[order.id] === 'Processing' ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              <span>Processing...</span>
+                            </>
+                          ) : (
+                            <span>Process Order</span>
+                          )}
                         </button>
                       )}
                       {order.status === 'Processing' && (
                         <button 
+                          id={`btn-move-cooking-${order.id}`}
+                          disabled={Boolean(updatingOrders[order.id])}
                           onClick={() => handleStatusChange(order.id, 'Cooking')}
-                          className="bg-orange-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-orange-700 transition-colors text-center flex items-center justify-center gap-1.5"
+                          className="bg-orange-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-orange-700 transition-colors text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
-                          <span>Move to Cooking</span>
-                          <span>🍳</span>
+                          {updatingOrders[order.id] === 'Cooking' ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              <span>Moving to Cooking...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Move to Cooking</span>
+                              <span>🍳</span>
+                            </>
+                          )}
                         </button>
                       )}
                       {order.status === 'Cooking' && (
                         <button 
+                          id={`btn-ready-pickup-${order.id}`}
+                          disabled={Boolean(updatingOrders[order.id])}
                           onClick={() => handleStatusChange(order.id, 'Ready for Pickup')}
-                          className="bg-purple-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-700 transition-colors text-center"
+                          className="bg-purple-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-700 transition-colors text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
-                          Ready for Pickup
+                          {updatingOrders[order.id] === 'Ready for Pickup' ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              <span>Preparing...</span>
+                            </>
+                          ) : (
+                            <span>Ready for Pickup</span>
+                          )}
                         </button>
                       )}
                       {(order.status === 'Ready for Pickup' || order.status === 'Ready to Pickup') && (
                         <button 
+                          id={`btn-mark-collected-${order.id}`}
+                          disabled={Boolean(updatingOrders[order.id])}
                           onClick={() => handleStatusChange(order.id, 'Completed')}
-                          className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-green-700 transition-colors text-center"
+                          className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-green-700 transition-colors text-center flex items-center justify-center gap-1.5 disabled:opacity-50"
                         >
-                          Mark Collected
+                          {updatingOrders[order.id] === 'Completed' ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              <span>Marking Collected...</span>
+                            </>
+                          ) : (
+                            <span>Mark Collected</span>
+                          )}
                         </button>
                       )}
                       {order.status === 'Paid' && (
                         <button 
+                          id={`btn-decline-order-${order.id}`}
+                          disabled={Boolean(updatingOrders[order.id])}
                           onClick={() => {
                             if (window.confirm(`Are you sure you want to decline and cancel order ${order.id}?`)) {
                               handleStatusChange(order.id, 'Cancelled');
                             }
                           }}
-                          className="text-gray-500 hover:text-red-600 text-[10px] font-bold uppercase tracking-wider py-1 text-center transition-colors"
+                          className="text-gray-500 hover:text-red-600 text-[10px] font-bold uppercase tracking-wider py-1 text-center transition-colors disabled:opacity-50"
                         >
                           Decline Transaction
                         </button>

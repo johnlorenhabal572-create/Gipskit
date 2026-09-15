@@ -5,7 +5,7 @@ function getAuthHeaders(): HeadersInit {
   };
 
   try {
-    const userStr = localStorage.getItem('gips_user') || localStorage.getItem('currentUser') || localStorage.getItem('user');
+    const userStr = localStorage.getItem('capstone_user') || localStorage.getItem('gips_user') || localStorage.getItem('currentUser') || localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
       if (user?.role) headers['x-user-role'] = user.role;
