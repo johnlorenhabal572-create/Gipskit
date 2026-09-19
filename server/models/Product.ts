@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+export interface IIngredient {
+  inventoryId: string;
+  deductionQty: number;
+}
+
 export interface IProduct extends Document {
   id: number;
   name: string;
@@ -9,6 +14,7 @@ export interface IProduct extends Document {
   image: string;
   inventoryLinkId?: string | null;
   inventoryLinkIds?: string[];
+  ingredients?: IIngredient[];
   status: 'Available' | 'Unavailable' | 'Not Available' | 'Out of Stock';
   description?: string;
   createdAt: Date;
@@ -25,6 +31,16 @@ const ProductSchema: Schema<IProduct> = new Schema(
     image: { type: String, default: '' },
     inventoryLinkId: { type: String, default: null },
     inventoryLinkIds: { type: [String], default: [] },
+    ingredients: {
+      type: [
+        {
+          _id: false,
+          inventoryId: { type: String, required: true },
+          deductionQty: { type: Number, required: true, min: [0.000001, 'Deduction quantity must be greater than 0'] }
+        }
+      ],
+      default: []
+    },
     status: { 
       type: String, 
       enum: ['Available', 'Unavailable', 'Not Available', 'Out of Stock'], 

@@ -335,30 +335,33 @@ router.post('/', async (req: Request, res: Response) => {
     if (isConnected) {
       for (const item of items) {
         const qty = Number(item.quantity) || 1;
-        let linkIds: string[] = [];
-        if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
-          linkIds = item.inventoryLinkIds;
-        } else if (item.inventoryLinkId) {
-          linkIds = [item.inventoryLinkId];
-        } else {
-          const numId = Number(item.id);
-          const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
-          if (prod) {
-            if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
-              linkIds = prod.inventoryLinkIds;
-            } else if (prod.inventoryLinkId) {
-              linkIds = [prod.inventoryLinkId];
-            }
-          }
+        const numId = Number(item.id);
+        let prod: any = null;
+        if (!isNaN(numId)) {
+          prod = await Product.findOne({ id: numId });
+        } else if (item.id) {
+          prod = await Product.findOne({ id: item.id });
         }
 
-        if (linkIds.length > 0) {
-          // Deduct from all linked InventoryItems
-          for (const invId of linkIds) {
+        // Check if item or product has configured ingredients
+        const configuredIngredients = (Array.isArray(item.ingredients) && item.ingredients.length > 0)
+          ? item.ingredients
+          : (prod && Array.isArray(prod.ingredients) && prod.ingredients.length > 0)
+            ? prod.ingredients
+            : null;
+
+        if (configuredIngredients && configuredIngredients.length > 0) {
+          // Deduct from each configured ingredient using its specific deductionQty * ordered quantity
+          for (const ing of configuredIngredients) {
+            const invId = String(ing.inventoryId);
+            const deductionRate = Number(ing.deductionQty);
+            if (!invId || isNaN(deductionRate) || deductionRate <= 0) continue;
+
+            const totalDeduction = Number((deductionRate * qty).toFixed(6));
             const invItem = await InventoryItem.findOne({ id: invId });
             if (invItem) {
-              const prevQty = invItem.quantity;
-              const newQty = Math.max(0, prevQty - qty);
+              const prevQty = Number(invItem.quantity) || 0;
+              const newQty = Math.max(0, Number((prevQty - totalDeduction).toFixed(6)));
               invItem.quantity = newQty;
               const threshold = invItem.lowStockThreshold || 10;
               if (newQty <= threshold && prevQty > threshold) {
@@ -366,13 +369,13 @@ router.post('/', async (req: Request, res: Response) => {
               }
               await invItem.save();
 
-              // Log the order deduction
+              // Log the order deduction with actual quantity deducted
               await InventoryLog.create({
                 id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
                 inventoryId: invId,
                 itemName: invItem.name,
                 type: 'order-deduction',
-                quantityChange: -qty,
+                quantityChange: -totalDeduction,
                 remainingQuantity: newQty,
                 reason: `Auto-deducted for Order ${orderId}`,
                 orderId,
@@ -382,10 +385,51 @@ router.post('/', async (req: Request, res: Response) => {
             }
           }
         } else {
-          // Manual product stock deduction
-          const numId = Number(item.id);
-          const prod = !isNaN(numId) ? await Product.findOne({ id: numId }) : null;
-          if (prod) {
+          // Legacy product deduction: use inventoryLinkIds / inventoryLinkId
+          let linkIds: string[] = [];
+          if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+            linkIds = item.inventoryLinkIds;
+          } else if (item.inventoryLinkId) {
+            linkIds = [item.inventoryLinkId];
+          } else if (prod) {
+            if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
+              linkIds = prod.inventoryLinkIds;
+            } else if (prod.inventoryLinkId) {
+              linkIds = [prod.inventoryLinkId];
+            }
+          }
+
+          if (linkIds.length > 0) {
+            // Deduct from all linked InventoryItems (1 each per ordered quantity)
+            for (const invId of linkIds) {
+              const invItem = await InventoryItem.findOne({ id: invId });
+              if (invItem) {
+                const prevQty = invItem.quantity;
+                const newQty = Math.max(0, prevQty - qty);
+                invItem.quantity = newQty;
+                const threshold = invItem.lowStockThreshold || 10;
+                if (newQty <= threshold && prevQty > threshold) {
+                  invItem.lowStockAcknowledged = false;
+                }
+                await invItem.save();
+
+                // Log the order deduction
+                await InventoryLog.create({
+                  id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  inventoryId: invId,
+                  itemName: invItem.name,
+                  type: 'order-deduction',
+                  quantityChange: -qty,
+                  remainingQuantity: newQty,
+                  reason: `Auto-deducted for Order ${orderId}`,
+                  orderId,
+                  performedBy: performerEmail,
+                  date: new Date()
+                });
+              }
+            }
+          } else if (prod) {
+            // Manual product stock deduction
             prod.stock = Math.max(0, (prod.stock || 0) - qty);
             await prod.save();
           }
@@ -399,48 +443,97 @@ router.post('/', async (req: Request, res: Response) => {
     // In-memory fallback deduction
     for (const item of items) {
       const qty = Number(item.quantity) || 1;
-      let linkIds: string[] = [];
-      if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
-        linkIds = item.inventoryLinkIds;
-      } else if (item.inventoryLinkId) {
-        linkIds = [item.inventoryLinkId];
+      const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id) || String(p.id) === String(item.id));
+
+      const configuredIngredients = (Array.isArray(item.ingredients) && item.ingredients.length > 0)
+        ? item.ingredients
+        : (prod && Array.isArray((prod as any).ingredients) && (prod as any).ingredients.length > 0)
+          ? (prod as any).ingredients
+          : null;
+
+      if (configuredIngredients && configuredIngredients.length > 0) {
+        // Deduct from each configured ingredient using its specific deductionQty * ordered quantity
+        for (const ing of configuredIngredients) {
+          const invId = String(ing.inventoryId);
+          const deductionRate = Number(ing.deductionQty);
+          if (!invId || isNaN(deductionRate) || deductionRate <= 0) continue;
+
+          const totalDeduction = Number((deductionRate * qty).toFixed(6));
+          const invItem = memoryStore.inventory.find(i => i.id === invId);
+          if (invItem) {
+            const prevQty = Number(invItem.quantity) || 0;
+            const newQty = Math.max(0, Number((prevQty - totalDeduction).toFixed(6)));
+            invItem.quantity = newQty;
+            const threshold = invItem.lowStockThreshold || 10;
+            if (newQty <= threshold && prevQty > threshold) {
+              invItem.lowStockAcknowledged = false;
+            }
+            memoryStore.inventoryLogs.push({
+              id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              inventoryId: invId,
+              inventoryItemId: invId,
+              itemName: invItem.name,
+              inventoryItemName: invItem.name,
+              type: 'order-deduction',
+              quantityChange: -totalDeduction,
+              quantity: -totalDeduction,
+              remainingQuantity: newQty,
+              reason: `Auto-deducted for Order ${orderId}`,
+              notes: `Auto-deducted for Order ${orderId}`,
+              orderId,
+              performer: performerEmail,
+              performedBy: performerEmail,
+              date: new Date(),
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
       } else {
-        const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
-        if (prod) {
+        // Legacy product deduction
+        let linkIds: string[] = [];
+        if (Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0) {
+          linkIds = item.inventoryLinkIds;
+        } else if (item.inventoryLinkId) {
+          linkIds = [item.inventoryLinkId];
+        } else if (prod) {
           if (Array.isArray(prod.inventoryLinkIds) && prod.inventoryLinkIds.length > 0) {
             linkIds = prod.inventoryLinkIds;
           } else if (prod.inventoryLinkId) {
             linkIds = [prod.inventoryLinkId];
           }
         }
-      }
 
-      if (linkIds.length > 0) {
-        for (const invId of linkIds) {
-          const invItem = memoryStore.inventory.find(i => i.id === invId);
-          if (invItem) {
-            const prevQty = invItem.quantity;
-            invItem.quantity = Math.max(0, invItem.quantity - qty);
-            const threshold = invItem.lowStockThreshold || 10;
-            if (invItem.quantity <= threshold && prevQty > threshold) {
-              invItem.lowStockAcknowledged = false;
+        if (linkIds.length > 0) {
+          for (const invId of linkIds) {
+            const invItem = memoryStore.inventory.find(i => i.id === invId);
+            if (invItem) {
+              const prevQty = invItem.quantity;
+              invItem.quantity = Math.max(0, invItem.quantity - qty);
+              const threshold = invItem.lowStockThreshold || 10;
+              if (invItem.quantity <= threshold && prevQty > threshold) {
+                invItem.lowStockAcknowledged = false;
+              }
+              memoryStore.inventoryLogs.push({
+                id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                inventoryId: invId,
+                inventoryItemId: invId,
+                itemName: invItem.name,
+                inventoryItemName: invItem.name,
+                type: 'order-deduction',
+                quantityChange: -qty,
+                quantity: -qty,
+                remainingQuantity: invItem.quantity,
+                reason: `Auto-deducted for Order ${orderId}`,
+                notes: `Auto-deducted for Order ${orderId}`,
+                orderId,
+                performer: performerEmail,
+                performedBy: performerEmail,
+                date: new Date(),
+                timestamp: new Date().toISOString()
+              });
             }
-            memoryStore.inventoryLogs.push({
-              id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              inventoryItemId: invId,
-              inventoryItemName: invItem.name,
-              type: 'order-deduction',
-              quantity: -qty,
-              remainingQuantity: invItem.quantity,
-              notes: `Auto-deducted for Order ${orderId}`,
-              performer: performerEmail,
-              timestamp: new Date().toISOString()
-            });
           }
-        }
-      } else {
-        const prod = memoryStore.products.find(p => p.id === (Number(item.id) || item.id));
-        if (prod) {
+        } else if (prod) {
           prod.stock = Math.max(0, (prod.stock || 0) - qty);
         }
       }

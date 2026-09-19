@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchOrders, fetchProductAnalysis } from '../api/orderService';
 import { fetchProducts } from '../api/productService';
 import { formatPrice } from '../utils/format';
@@ -6,6 +6,15 @@ import {
   Calendar, TrendingUp, ShoppingBag, DollarSign, ChevronLeft, ChevronRight,
   BarChart2, Award, AlertCircle, RefreshCw, Layers
 } from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip 
+} from 'recharts';
 
 const SalesReport = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -200,63 +209,182 @@ const SalesReport = () => {
     return false;
   };
 
+  // Generate trend line data based on the current period selection
+  const trendData = useMemo(() => {
+    const completedOrders = orders.filter(o => o.status === 'Completed');
+
+    if (filterType === 'day') {
+      // 7-day trend leading up to and including selectedDate (matching reference design)
+      const points = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(selectedDate);
+        d.setDate(selectedDate.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+
+        const nextD = new Date(d);
+        nextD.setDate(d.getDate() + 1);
+
+        const daySales = completedOrders
+          .filter(order => {
+            const orderDate = new Date(order.date || order.createdAt);
+            return orderDate >= d && orderDate < nextD;
+          })
+          .reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+        points.push({
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          fullDateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          revenue: daySales,
+          isSelected: i === 0
+        });
+      }
+      return points;
+    }
+
+    if (filterType === 'week') {
+      // 7 days of the selected week (Sunday through Saturday)
+      const startOfWeek = new Date(selectedDate);
+      startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const points = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+
+        const nextD = new Date(d);
+        nextD.setDate(d.getDate() + 1);
+
+        const daySales = completedOrders
+          .filter(order => {
+            const orderDate = new Date(order.date || order.createdAt);
+            return orderDate >= d && orderDate < nextD;
+          })
+          .reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+        points.push({
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          fullDateLabel: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+          revenue: daySales,
+          isSelected: d.toDateString() === selectedDate.toDateString()
+        });
+      }
+      return points;
+    }
+
+    if (filterType === 'month') {
+      // All days of the selected month
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      const points = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const d = new Date(year, month, day, 0, 0, 0, 0);
+        const nextD = new Date(year, month, day + 1, 0, 0, 0, 0);
+
+        const daySales = completedOrders
+          .filter(order => {
+            const orderDate = new Date(order.date || order.createdAt);
+            return orderDate >= d && orderDate < nextD;
+          })
+          .reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+        points.push({
+          label: `${d.toLocaleDateString('en-US', { month: 'short' })} ${day}`,
+          fullDateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          revenue: daySales,
+          isSelected: d.toDateString() === selectedDate.toDateString()
+        });
+      }
+      return points;
+    }
+
+    if (filterType === 'year') {
+      // 12 months of the selected year
+      const year = selectedDate.getFullYear();
+      const points = [];
+      for (let m = 0; m < 12; m++) {
+        const startOfMonth = new Date(year, m, 1, 0, 0, 0, 0);
+        const endOfMonth = new Date(year, m + 1, 1, 0, 0, 0, 0);
+
+        const monthSales = completedOrders
+          .filter(order => {
+            const orderDate = new Date(order.date || order.createdAt);
+            return orderDate >= startOfMonth && orderDate < endOfMonth;
+          })
+          .reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+        points.push({
+          label: startOfMonth.toLocaleDateString('en-US', { month: 'short' }),
+          fullDateLabel: startOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          revenue: monthSales,
+          isSelected: m === selectedDate.getMonth()
+        });
+      }
+      return points;
+    }
+
+    return [];
+  }, [orders, filterType, selectedDate]);
+
+  const maxRevenue = useMemo(() => {
+    return trendData.reduce((max, d) => Math.max(max, d.revenue), 0);
+  }, [trendData]);
+
+  const yDomainMax = useMemo(() => {
+    if (maxRevenue <= 0) return 2000;
+    const target = maxRevenue * 1.2;
+    if (target <= 2000) return 2000;
+    const step = target > 20000 ? 5000 : target > 5000 ? 2000 : 1000;
+    return Math.ceil(target / step) * step;
+  }, [maxRevenue]);
+
+  const yTicks = useMemo(() => {
+    const step = yDomainMax / 4;
+    return [0, step, step * 2, step * 3, yDomainMax];
+  }, [yDomainMax]);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg border border-orange-300 shadow-sm text-left">
+          <p className="text-[11px] text-gray-700 font-medium">
+            {data.fullDateLabel}
+          </p>
+          <p className="text-sm font-black text-dark tracking-tight mt-0.5">
+            ₱{Number(data.revenue).toLocaleString('en-US')}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderCustomXAxisTick = (props: any) => {
+    const { x, y, payload } = props;
+    const item = (typeof payload.index === 'number' && trendData[payload.index])
+      ? trendData[payload.index]
+      : trendData.find(d => d.label === payload.value);
+    const isSelected = item?.isSelected;
+    return (
+      <text
+        x={x}
+        y={y + 14}
+        textAnchor="middle"
+        fill={isSelected ? '#ea580c' : '#64748b'}
+        fontSize={11}
+        fontWeight={isSelected ? 700 : 500}
+      >
+        {payload.value}
+      </text>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header Controls */}
-        <header className="space-y-4">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {/* Period Filter Buttons */}
-              <div className="flex bg-white p-1 rounded-lg border border-gray-300">
-                {(['day', 'week', 'month', 'year'] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setFilterType(type)}
-                    className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${
-                      filterType === type 
-                        ? 'bg-dark text-white' 
-                        : 'text-gray-600 hover:text-dark'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-
-              {/* Date Stepper */}
-              <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gray-300">
-                <button 
-                  onClick={() => changePeriod(-1)}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="flex items-center gap-1.5 px-2 border-x border-gray-200">
-                  <Calendar size={13} className="text-gray-500" />
-                  <span className="font-bold text-dark text-xs min-w-[120px] text-center">
-                    {getPeriodLabel()}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => changePeriod(1)}
-                  disabled={isFuture()}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors disabled:opacity-20"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-
-              {/* Actions */}
-              <button 
-                onClick={loadData}
-                className="p-2 bg-white border border-gray-300 text-gray-600 hover:text-dark rounded-lg transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw size={15} />
-              </button>
-            </div>
-        </header>
-
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white p-5 rounded-xl border border-gray-200 flex items-center justify-between">
@@ -298,6 +426,105 @@ const SalesReport = () => {
             <div className="w-10 h-10 bg-gray-100 border border-gray-200 text-gray-700 rounded-lg flex items-center justify-center">
               <BarChart2 size={20} />
             </div>
+          </div>
+        </div>
+
+        {/* Sales Trend Graph Section */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+            <h2 className="text-base sm:text-lg font-bold text-dark tracking-tight">Sales Trend</h2>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Period Filter Buttons */}
+              <div className="flex bg-white p-1 rounded-lg border border-gray-300">
+                {(['day', 'week', 'month', 'year'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${
+                      filterType === type 
+                        ? 'bg-dark text-white' 
+                        : 'text-gray-600 hover:text-dark'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date Stepper */}
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gray-300">
+                <button 
+                  onClick={() => changePeriod(-1)}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors"
+                  title="Previous"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <div className="flex items-center gap-1.5 px-2 border-x border-gray-200">
+                  <Calendar size={13} className="text-gray-500" />
+                  <span className="font-bold text-dark text-xs min-w-[120px] text-center">
+                    {getPeriodLabel()}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => changePeriod(1)}
+                  disabled={isFuture()}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-600 transition-colors disabled:opacity-20"
+                  title="Next"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-[280px] sm:h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={trendData}
+                margin={{ top: 15, right: 20, left: 10, bottom: 15 }}
+              >
+                <CartesianGrid stroke="#f1f3f5" vertical={true} horizontal={true} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={{ stroke: '#cbd5e1' }}
+                  tickLine={false}
+                  interval={filterType === 'month' ? (trendData.length > 20 ? 2 : 1) : 0}
+                  tick={renderCustomXAxisTick}
+                />
+                <YAxis
+                  axisLine={{ stroke: '#cbd5e1' }}
+                  tickLine={false}
+                  domain={[0, yDomainMax]}
+                  ticks={yTicks}
+                  tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                  tickFormatter={(val) => `₱${Number(val).toLocaleString('en-US')}`}
+                />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  cursor={{ stroke: '#f97316', strokeWidth: 1.5, strokeDasharray: '3 3' }}
+                />
+                <Line
+                  type="linear"
+                  dataKey="revenue"
+                  stroke="#f97316"
+                  strokeWidth={2.5}
+                  dot={{
+                    r: 4,
+                    fill: '#ea580c',
+                    stroke: '#ffffff',
+                    strokeWidth: 1
+                  }}
+                  activeDot={{
+                    r: 4,
+                    fill: '#ea580c',
+                    stroke: '#ffffff',
+                    strokeWidth: 1
+                  }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 

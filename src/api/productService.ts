@@ -191,6 +191,7 @@ export const createProduct = async (newProduct: any): Promise<any> => {
     : (newProduct.inventoryLinkId ? [newProduct.inventoryLinkId] : []);
 
   const payload = {
+    ...newProduct,
     name: newProduct.name?.trim(),
     price: Number(newProduct.price),
     category: newProduct.category?.trim(),
@@ -198,6 +199,7 @@ export const createProduct = async (newProduct: any): Promise<any> => {
     image: newProduct.image || '',
     inventoryLinkId: linkIds[0] || null,
     inventoryLinkIds: linkIds,
+    ingredients: Array.isArray(newProduct.ingredients) ? newProduct.ingredients : [],
     status: newProduct.status || 'Available',
     description: newProduct.description || ''
   };
@@ -227,6 +229,9 @@ export const editProduct = async (id: number | string, updatedData: any): Promis
       : (updatedData.inventoryLinkId ? [updatedData.inventoryLinkId] : []);
     payload.inventoryLinkIds = linkIds;
     payload.inventoryLinkId = linkIds[0] || null;
+  }
+  if (updatedData.ingredients !== undefined) {
+    payload.ingredients = Array.isArray(updatedData.ingredients) ? updatedData.ingredients : [];
   }
 
   const res = await fetch(`/api/products/${id}`, {

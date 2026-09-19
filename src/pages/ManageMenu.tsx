@@ -39,6 +39,7 @@ const ManageMenu = () => {
     image: '',
     inventoryLinkId: '',
     inventoryLinkIds: [] as string[],
+    ingredients: [] as { inventoryId: string; deductionQty: number | string }[],
     stock: 0,
     status: 'Available',
     description: ''
@@ -156,15 +157,38 @@ const ManageMenu = () => {
 
     const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
 
+    // Resolve ingredients with deductionQty for each linked item
+    const resolvedIngredients = linkIds.map(id => {
+      const match = (formData.ingredients || []).find((ing: any) => ing && String(ing.inventoryId) === String(id));
+      const val = match ? parseFloat(String(match.deductionQty)) : 1;
+      return {
+        inventoryId: id,
+        deductionQty: (!isNaN(val) && val > 0) ? val : 1
+      };
+    });
+
+    for (const ing of resolvedIngredients) {
+      if (isNaN(ing.deductionQty) || ing.deductionQty <= 0) {
+        const item = inventory.find(i => i.id === ing.inventoryId);
+        setErrorMessage(`Deduction quantity for "${item?.name || 'ingredient'}" must be greater than 0`);
+        return;
+      }
+    }
+
     try {
       const newProd = await createProduct({
         ...formData,
         stock: computedStock,
         status: effectiveStatus,
         inventoryLinkId: linkIds[0] || null,
-        inventoryLinkIds: linkIds
+        inventoryLinkIds: linkIds,
+        ingredients: resolvedIngredients
       });
-      setProducts(prev => [...prev, newProd]);
+      let finalProd = newProd;
+      if (resolvedIngredients.length > 0 && (!newProd.ingredients || newProd.ingredients.length === 0)) {
+        finalProd = await editProduct(newProd.id, { ingredients: resolvedIngredients });
+      }
+      setProducts(prev => [...prev, finalProd]);
       resetForm();
       setIsAdding(false);
     } catch (err: any) {
@@ -201,6 +225,18 @@ const ManageMenu = () => {
       computedStock = product.stock || 0;
     }
 
+    const existingIngredients: { inventoryId: string; deductionQty: number }[] = Array.isArray(product.ingredients)
+      ? product.ingredients
+      : [];
+
+    const loadedIngredients = linkIds.map(id => {
+      const match = existingIngredients.find(ing => ing && String(ing.inventoryId) === String(id));
+      return {
+        inventoryId: id,
+        deductionQty: match && match.deductionQty !== undefined ? match.deductionQty : 1
+      };
+    });
+
     setFormData({
       name: product.name,
       price: product.price,
@@ -208,6 +244,7 @@ const ManageMenu = () => {
       image: product.image,
       inventoryLinkId: linkIds[0] || '',
       inventoryLinkIds: linkIds,
+      ingredients: loadedIngredients,
       stock: computedStock,
       status: (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : (product.status || 'Available'),
       description: product.description || ''
@@ -240,13 +277,31 @@ const ManageMenu = () => {
 
     const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
 
+    const resolvedIngredients = linkIds.map(id => {
+      const match = (formData.ingredients || []).find((ing: any) => ing && String(ing.inventoryId) === String(id));
+      const val = match ? parseFloat(String(match.deductionQty)) : 1;
+      return {
+        inventoryId: id,
+        deductionQty: (!isNaN(val) && val > 0) ? val : 1
+      };
+    });
+
+    for (const ing of resolvedIngredients) {
+      if (isNaN(ing.deductionQty) || ing.deductionQty <= 0) {
+        const item = inventory.find(i => i.id === ing.inventoryId);
+        setErrorMessage(`Deduction quantity for "${item?.name || 'ingredient'}" must be greater than 0`);
+        return;
+      }
+    }
+
     const updated = { 
       ...formData, 
       id: editingId,
       stock: computedStock,
       status: effectiveStatus,
       inventoryLinkId: linkIds[0] || null,
-      inventoryLinkIds: linkIds
+      inventoryLinkIds: linkIds,
+      ingredients: resolvedIngredients
     };
     try {
       const saved = await editProduct(editingId!, updated);
@@ -267,6 +322,7 @@ const ManageMenu = () => {
       image: IMAGES.PRODUCT_PLACEHOLDER,
       inventoryLinkId: '',
       inventoryLinkIds: [],
+      ingredients: [],
       stock: 0,
       status: 'Available',
       description: ''
@@ -604,7 +660,7 @@ const ManageMenu = () => {
                       {formData.inventoryLinkIds.length > 0 && (
                         <button 
                           type="button" 
-                          onClick={() => setFormData({...formData, inventoryLinkIds: [], inventoryLinkId: '', stock: 0})}
+                          onClick={() => setFormData({...formData, inventoryLinkIds: [], inventoryLinkId: '', ingredients: [], stock: 0})}
                           className="text-[10px] font-bold text-red-600 hover:underline"
                         >
                           Clear all ({formData.inventoryLinkIds.length})
@@ -632,6 +688,11 @@ const ManageMenu = () => {
                                     const next = isChecked
                                       ? formData.inventoryLinkIds.filter(id => id !== item.id)
                                       : [...formData.inventoryLinkIds, item.id];
+                                    const nextIngredients = isChecked
+                                      ? (formData.ingredients || []).filter((ing: any) => ing && String(ing.inventoryId) !== String(item.id))
+                                      : (formData.ingredients || []).some((ing: any) => ing && String(ing.inventoryId) === String(item.id))
+                                        ? formData.ingredients
+                                        : [...(formData.ingredients || []), { inventoryId: item.id, deductionQty: 1 }];
                                     const nextStock = next.length > 0
                                       ? Math.min(...next.map(id => {
                                           const inv = inventory.find((i: any) => i.id === id);
@@ -642,6 +703,7 @@ const ManageMenu = () => {
                                       ...formData,
                                       inventoryLinkIds: next,
                                       inventoryLinkId: next[0] || '',
+                                      ingredients: nextIngredients,
                                       stock: nextStock,
                                       status: (next.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
                                     });
@@ -659,51 +721,100 @@ const ManageMenu = () => {
                       )}
                     </div>
 
-                    {/* Selected tags list */}
+                    {/* Selected linked items with per-item deduction quantity */}
                     {formData.inventoryLinkIds.length > 0 ? (
-                      <div className="p-2 bg-green-50/70 border border-green-200 rounded-lg space-y-1.5">
+                      <div className="p-3 bg-green-50/70 border border-green-200 rounded-lg space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold text-green-800 uppercase tracking-wider">
-                            Linked Items ({formData.inventoryLinkIds.length}):
+                            Linked Ingredients ({formData.inventoryLinkIds.length}):
                           </span>
                           <span className="text-[10px] text-green-700 font-medium">
-                            Auto-deducts 1 each per order
+                            Deduction per serving
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="space-y-2">
                           {formData.inventoryLinkIds.map(id => {
                             const inv = inventory.find(i => i.id === id);
+                            const currentIngredient = (formData.ingredients || []).find((ing: any) => ing && String(ing.inventoryId) === String(id));
+                            const currentDeduction = currentIngredient?.deductionQty !== undefined ? currentIngredient.deductionQty : 1;
+                            const unitLabel = inv?.unit || 'unit';
+
                             return (
-                              <span 
+                              <div 
                                 key={id} 
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-white border border-green-300 text-green-900 shadow-sm"
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white border border-green-200 shadow-xs"
                               >
-                                <span>{inv ? inv.name : id}</span>
-                                {inv && <span className="text-[10px] text-gray-500">({inv.quantity} {inv.unit})</span>}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const next = formData.inventoryLinkIds.filter(i => i !== id);
-                                    const nextStock = next.length > 0
-                                      ? Math.min(...next.map(linkId => {
-                                          const invItem = inventory.find((i: any) => i.id === linkId);
-                                          return invItem ? invItem.quantity : 0;
-                                        }))
-                                      : 0;
-                                    setFormData({ 
-                                      ...formData, 
-                                      inventoryLinkIds: next, 
-                                      inventoryLinkId: next[0] || '',
-                                      stock: nextStock,
-                                      status: (next.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
-                                    });
-                                  }}
-                                  className="text-gray-400 hover:text-red-600 transition-colors"
-                                  title="Remove link"
-                                >
-                                  <X size={12} />
-                                </button>
-                              </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-xs text-dark truncate">
+                                    {inv ? inv.name : id}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
+                                    <span>Unit: <span className="font-medium text-gray-800">{unitLabel}</span></span>
+                                    {inv && (
+                                      <>
+                                        <span className="text-gray-300">•</span>
+                                        <span className="text-gray-500">In stock: {inv.quantity} {unitLabel}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <label className="text-[11px] font-medium text-gray-600 whitespace-nowrap">
+                                    Deduction per serving:
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0.0001"
+                                      value={currentDeduction}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        const updatedIngs = [...(formData.ingredients || [])];
+                                        const idx = updatedIngs.findIndex((ing: any) => ing && String(ing.inventoryId) === String(id));
+                                        if (idx >= 0) {
+                                          updatedIngs[idx] = { ...updatedIngs[idx], deductionQty: val };
+                                        } else {
+                                          updatedIngs.push({ inventoryId: id, deductionQty: val });
+                                        }
+                                        setFormData({ ...formData, ingredients: updatedIngs });
+                                      }}
+                                      className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500 bg-white text-dark font-medium"
+                                      placeholder="1"
+                                    />
+                                    <span className="text-[11px] text-gray-500 font-medium min-w-7">
+                                      {unitLabel}
+                                    </span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = formData.inventoryLinkIds.filter(i => i !== id);
+                                      const nextIngredients = (formData.ingredients || []).filter((ing: any) => ing && String(ing.inventoryId) !== String(id));
+                                      const nextStock = next.length > 0
+                                        ? Math.min(...next.map(linkId => {
+                                            const invItem = inventory.find((i: any) => i.id === linkId);
+                                            return invItem ? invItem.quantity : 0;
+                                          }))
+                                        : 0;
+                                      setFormData({ 
+                                        ...formData, 
+                                        inventoryLinkIds: next, 
+                                        inventoryLinkId: next[0] || '',
+                                        ingredients: nextIngredients,
+                                        stock: nextStock,
+                                        status: (next.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
+                                      });
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                    title="Remove link"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
