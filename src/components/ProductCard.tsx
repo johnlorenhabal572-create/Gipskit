@@ -14,7 +14,18 @@ const ProductCard = ({ product }: { product: any }) => {
   const [modalQty, setModalQty] = useState(1);
   const [addedNotice, setAddedNotice] = useState(false);
 
-  const isAvailable = product.status !== 'Not Available' && (product.stock === undefined || product.stock > 0);
+  const isManuallyUnavailable =
+    product.status === 'Not Available' ||
+    product.status === 'Unavailable';
+
+  const isOutOfStock =
+    !isManuallyUnavailable &&
+    product.stock !== undefined &&
+    product.stock <= 0;
+
+  const isAvailable =
+    !isManuallyUnavailable &&
+    !isOutOfStock;
 
   const handleAddToCart = (qty = 1) => {
     if (!user) {
@@ -52,7 +63,7 @@ const ProductCard = ({ product }: { product: any }) => {
             {!isAvailable && (
               <div className="absolute inset-0 bg-dark/70 flex items-center justify-center">
                 <span className="bg-white text-dark px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border border-gray-300">
-                  Out of Stock
+                  {isManuallyUnavailable ? 'Not Available' : 'Out of Stock'}
                 </span>
               </div>
             )}
@@ -71,13 +82,23 @@ const ProductCard = ({ product }: { product: any }) => {
 
           <div className="flex justify-between items-center mb-1.5 gap-1">
             <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">{product.category}</span>
-            <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border ${
-              product.stock <= 5 
-                ? 'bg-red-50 text-red-600 border-red-200' 
-                : 'bg-gray-50 text-gray-500 border-gray-200'
-            }`}>
-              {product.stock} left
-            </span>
+            {isManuallyUnavailable ? (
+              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border bg-red-50 text-red-700 border-red-200">
+                Not Available
+              </span>
+            ) : isOutOfStock ? (
+              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border bg-red-50 text-red-600 border-red-200">
+                Out of Stock
+              </span>
+            ) : (
+              <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border ${
+                product.stock <= 5 
+                  ? 'bg-red-50 text-red-600 border-red-200' 
+                  : 'bg-gray-50 text-gray-500 border-gray-200'
+              }`}>
+                {product.stock} left
+              </span>
+            )}
           </div>
 
           {/* Short description preview if available */}
@@ -118,8 +139,8 @@ const ProductCard = ({ product }: { product: any }) => {
               id={`product-addcart-btn-${product.id}`}
               onClick={() => handleAddToCart(1)}
               disabled={!isAvailable}
-              title={!isAvailable ? 'Out of Stock' : addedNotice ? 'Added' : 'Order'}
-              aria-label={!isAvailable ? 'Out of Stock' : addedNotice ? 'Added' : 'Order'}
+              title={!isAvailable ? (isManuallyUnavailable ? 'Not Available' : 'Out of Stock') : addedNotice ? 'Added' : 'Order'}
+              aria-label={!isAvailable ? (isManuallyUnavailable ? 'Not Available' : 'Out of Stock') : addedNotice ? 'Added' : 'Order'}
               className={`w-full py-2 rounded-lg font-bold text-xs transition-colors flex items-center justify-center ${
                 isAvailable 
                   ? addedNotice 
@@ -163,9 +184,15 @@ const ProductCard = ({ product }: { product: any }) => {
                     {product.category}
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
-                    isAvailable ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                    isAvailable 
+                      ? 'bg-green-50 text-green-700 border-green-200' 
+                      : 'bg-red-50 text-red-700 border-red-200'
                   }`}>
-                    {isAvailable ? `In Stock (${product.stock})` : 'Out of Stock'}
+                    {isAvailable 
+                      ? `In Stock (${product.stock})` 
+                      : isManuallyUnavailable 
+                        ? 'Not Available' 
+                        : 'Out of Stock'}
                   </span>
                 </div>
 
@@ -223,8 +250,16 @@ const ProductCard = ({ product }: { product: any }) => {
                   <div className="bg-white border border-gray-200 p-3 rounded-lg flex items-center gap-2.5">
                     <Package size={16} className="text-gray-400" />
                     <div>
-                      <p className="text-[10px] uppercase font-bold text-gray-400">Available Stock</p>
-                      <p className="font-bold text-dark">{product.stock} units</p>
+                      <p className="text-[10px] uppercase font-bold text-gray-400">
+                        {isManuallyUnavailable ? 'Status' : 'Available Stock'}
+                      </p>
+                      <p className="font-bold text-dark">
+                        {isManuallyUnavailable 
+                          ? 'Not Available' 
+                          : isOutOfStock 
+                            ? 'Out of Stock' 
+                            : `${product.stock} units`}
+                      </p>
                     </div>
                   </div>
                   <div className="bg-white border border-gray-200 p-3 rounded-lg flex items-center gap-2.5">
@@ -295,7 +330,9 @@ const ProductCard = ({ product }: { product: any }) => {
                       <span>
                         {isAvailable 
                           ? `Add to Cart (${formatPrice(product.price * modalQty)})` 
-                          : 'Currently Unavailable'}
+                          : isManuallyUnavailable 
+                            ? 'Not Available' 
+                            : 'Out of Stock'}
                       </span>
                     </>
                   )}

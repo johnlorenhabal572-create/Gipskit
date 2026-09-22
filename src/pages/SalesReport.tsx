@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchOrders, fetchProductAnalysis } from '../api/orderService';
 import { fetchProducts } from '../api/productService';
+import { fetchInventoryTurnover, InventoryTurnoverItem } from '../api/inventoryService';
 import { formatPrice } from '../utils/format';
 import { 
   Calendar, TrendingUp, ShoppingBag, DollarSign, ChevronLeft, ChevronRight,
-  BarChart2, Award, AlertCircle, RefreshCw, Layers
+  BarChart2, Award, AlertCircle, RefreshCw, Layers, Loader2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -21,7 +22,65 @@ const SalesReport = () => {
   const [menuProducts, setMenuProducts] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'transactions' | 'product-analysis'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'product-analysis' | 'inventory'>('transactions');
+  const [turnoverItems, setTurnoverItems] = useState<InventoryTurnoverItem[]>([]);
+  const [isTurnoverLoading, setIsTurnoverLoading] = useState(false);
+  const [turnoverError, setTurnoverError] = useState<string | null>(null);
+
+  const formatQuantity = (val: number): string => {
+    if (val === undefined || val === null || isNaN(val)) return '0';
+    return Number(Number(val).toFixed(4)).toString();
+  };
+
+  const periodRange = useMemo(() => {
+    let start: Date;
+    let end: Date;
+
+    if (filterType === 'day') {
+      start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0, 0);
+      end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999);
+    } else if (filterType === 'week') {
+      start = new Date(selectedDate);
+      start.setDate(selectedDate.getDate() - selectedDate.getDay());
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      end.setMilliseconds(end.getMilliseconds() - 1);
+    } else if (filterType === 'month') {
+      start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else {
+      start = new Date(selectedDate.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(selectedDate.getFullYear(), 11, 31, 23, 59, 59, 999);
+    }
+
+    return {
+      startDate: start.toISOString(),
+      endDate: end.toISOString()
+    };
+  }, [filterType, selectedDate]);
+
+  const loadTurnover = () => {
+    setIsTurnoverLoading(true);
+    setTurnoverError(null);
+
+    fetchInventoryTurnover(periodRange.startDate, periodRange.endDate)
+      .then((data) => {
+        setTurnoverItems(data);
+        setIsTurnoverLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load inventory turnover:', err);
+        setTurnoverError(err?.message || 'Failed to calculate inventory turnover');
+        setIsTurnoverLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === 'inventory') {
+      loadTurnover();
+    }
+  }, [activeTab, periodRange.startDate, periodRange.endDate]);
 
   const loadData = async () => {
     try {
@@ -170,6 +229,107 @@ const SalesReport = () => {
       }
     }
   }
+
+  // Helper function to calculate median
+  const calculateMedian = (values: number[]): number => {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+    return sorted[mid];
+  };
+
+  // Product Classification: Fast-Moving vs. Slow-Moving
+  // 1. Calculate Sales Frequency and Volume from completed orders in this period
+  const orderProductFrequency: { [key: string]: number } = {};
+  const orderProductVolume: { [key: string]: number } = {};
+
+  filteredOrders.forEach(order => {
+    if (Array.isArray(order.items)) {
+      const distinctProductsInThisOrder = new Set<string>();
+      order.items.forEach((item: any) => {
+        const normName = (item.name || '').trim().toLowerCase();
+        if (normName) {
+          distinctProductsInThisOrder.add(normName);
+          const q = Number(item.quantity) || 0;
+          orderProductVolume[normName] = (orderProductVolume[normName] || 0) + q;
+        }
+      });
+      distinctProductsInThisOrder.forEach(normName => {
+        orderProductFrequency[normName] = (orderProductFrequency[normName] || 0) + 1;
+      });
+    }
+  });
+
+  // 2. Build list for catalog/menu products only (excluding custom POS items that don't match catalog)
+  interface ClassifiedProduct {
+    id: string | number;
+    name: string;
+    category: string;
+    frequency: number;
+    volume: number;
+    classification: 'Fast-Moving' | 'Slow-Moving';
+  }
+
+  const classifiedCatalogProducts: ClassifiedProduct[] = [];
+  const seenCatalogKeys = new Set<string>();
+
+  menuProducts.forEach((prod, index) => {
+    const rawName = prod.name?.trim();
+    if (!rawName) return;
+    const normName = rawName.toLowerCase();
+    if (seenCatalogKeys.has(normName)) return;
+    seenCatalogKeys.add(normName);
+
+    const freq = orderProductFrequency[normName] || 0;
+    const vol = orderProductVolume[normName] || 0;
+
+    classifiedCatalogProducts.push({
+      id: prod.id || `menu-${index}`,
+      name: rawName,
+      category: prod.category || 'General',
+      frequency: freq,
+      volume: vol,
+      classification: 'Slow-Moving'
+    });
+  });
+
+  // 3. Determine median Sales Frequency and Sales Volume among catalog products that have sales
+  const catalogWithSales = classifiedCatalogProducts.filter(p => p.volume > 0);
+  const medianSalesFrequency = calculateMedian(catalogWithSales.map(p => p.frequency));
+  const medianSalesVolume = calculateMedian(catalogWithSales.map(p => p.volume));
+
+  // 4. Classify each catalog product:
+  // FAST-MOVING: frequency >= median frequency AND volume >= median volume (and must have volume > 0)
+  // SLOW-MOVING: Otherwise (including zero-sales products)
+  classifiedCatalogProducts.forEach(prod => {
+    if (prod.volume > 0 && prod.frequency >= medianSalesFrequency && prod.volume >= medianSalesVolume) {
+      prod.classification = 'Fast-Moving';
+    } else {
+      prod.classification = 'Slow-Moving';
+    }
+  });
+
+  // 5. Sort: FAST-MOVING first, SLOW-MOVING last.
+  // Within Fast-Moving: volume descending, then frequency descending, then name ascending.
+  // Within Slow-Moving: volume descending, then frequency descending, then name ascending.
+  const sortedClassifiedProducts = [...classifiedCatalogProducts].sort((a, b) => {
+    if (a.classification !== b.classification) {
+      return a.classification === 'Fast-Moving' ? -1 : 1;
+    }
+    if (b.volume !== a.volume) {
+      return b.volume - a.volume;
+    }
+    if (b.frequency !== a.frequency) {
+      return b.frequency - a.frequency;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  const fastMovingCount = sortedClassifiedProducts.filter(p => p.classification === 'Fast-Moving').length;
+  const slowMovingCount = sortedClassifiedProducts.filter(p => p.classification === 'Slow-Moving').length;
 
   const changePeriod = (delta: number) => {
     const newDate = new Date(selectedDate);
@@ -382,6 +542,69 @@ const SalesReport = () => {
     );
   };
 
+  // Inventory Turnover Evaluation: Relative color classification & sorting
+  type TurnoverColorTier = 'high' | 'moderate' | 'low';
+
+  // 1. Sort inventory items by turnover DESCENDING, then alphabetically by name (deterministic tie-breaker)
+  const sortedTurnoverItems = useMemo(() => {
+    return [...turnoverItems].sort((a, b) => {
+      const turnA = typeof a.turnover === 'number' && !isNaN(a.turnover) ? a.turnover : 0;
+      const turnB = typeof b.turnover === 'number' && !isNaN(b.turnover) ? b.turnover : 0;
+      if (turnB !== turnA) {
+        return turnB - turnA;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [turnoverItems]);
+
+  // 2. Relative rank-based classification for turnover values in the selected period
+  const turnoverTierMap = useMemo(() => {
+    const map = new Map<string, TurnoverColorTier>();
+
+    // Step 1: Take all items with turnover > 0
+    // Step 2: Sort those positive-turnover items from highest to lowest (already sorted in sortedTurnoverItems)
+    const positiveItems = sortedTurnoverItems.filter(item => {
+      const val = typeof item.turnover === 'number' && !isNaN(item.turnover) ? item.turnover : 0;
+      return val > 0;
+    });
+
+    const nPos = positiveItems.length;
+
+    // Rules for small datasets & 3-way ranking
+    if (nPos === 1) {
+      // B. ONE positive-turnover item: That item is HIGH / GREEN. All 0.00× items are LOW / RED.
+      map.set(positiveItems[0].id, 'high');
+    } else if (nPos === 2) {
+      // C. TWO positive-turnover items: Highest positive turnover = HIGH / GREEN. Lower positive turnover = LOW / RED. Do NOT force a Moderate item.
+      map.set(positiveItems[0].id, 'high');
+      map.set(positiveItems[1].id, 'low');
+    } else if (nPos === 3) {
+      // D. THREE positive-turnover items: Highest = HIGH / GREEN. Middle = MODERATE / YELLOW. Lowest = LOW / RED.
+      map.set(positiveItems[0].id, 'high');
+      map.set(positiveItems[1].id, 'moderate');
+      map.set(positiveItems[2].id, 'low');
+    } else if (nPos >= 4) {
+      // E. Four or more positive-turnover items: Divide into approximately three balanced groups
+      const base = Math.floor(nPos / 3);
+      const rem = nPos % 3;
+      const highCount = base + (rem > 0 ? 1 : 0);
+      const modCount = base + (rem > 1 ? 1 : 0);
+
+      positiveItems.forEach((item, idx) => {
+        if (idx < highCount) {
+          map.set(item.id, 'high');
+        } else if (idx < highCount + modCount) {
+          map.set(item.id, 'moderate');
+        } else {
+          map.set(item.id, 'low');
+        }
+      });
+    }
+
+    // A. ZERO positive-turnover items / zero turnover: Any item not in map (turnover === 0) defaults to 'low'
+    return map;
+  }, [sortedTurnoverItems]);
+
   return (
     <div className="min-h-screen bg-white p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -550,6 +773,16 @@ const SalesReport = () => {
           >
             Product Analysis
           </button>
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
+              activeTab === 'inventory' 
+                ? 'bg-dark text-white border-dark' 
+                : 'bg-white text-gray-600 border-gray-300 hover:text-dark'
+            }`}
+          >
+            Inventory
+          </button>
         </div>
 
         {/* Tab 1: Orders Log Table */}
@@ -620,74 +853,109 @@ const SalesReport = () => {
         {/* Tab 2: Product Analysis */}
         {activeTab === 'product-analysis' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Best Selling Products */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center font-bold">
-                    <Award size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-dark uppercase tracking-wider">Best-Selling Products</h3>
-                    <p className="text-[10px] text-gray-500 font-medium">Top performers during selected period</p>
-                  </div>
+            {/* Best Selling Products */}
+            <div className="bg-white p-5 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center font-bold">
+                  <Award size={16} />
                 </div>
-
-                {bestSellersPeriod.length === 0 ? (
-                  <p className="text-center py-6 text-xs text-gray-400 font-medium">No product sales in this period.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {bestSellersPeriod.map((prod, idx) => (
-                      <div key={prod.name} className="p-3 rounded-lg bg-gray-50 flex items-center justify-between border border-gray-200">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
-                            idx === 0 ? 'bg-dark text-white' : 'bg-gray-200 text-gray-700'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="text-xs font-bold text-dark">{prod.name}</p>
-                            <p className="text-[10px] text-gray-500">{prod.quantity} units sold</p>
-                          </div>
-                        </div>
-                        <span className="text-xs font-bold text-dark">{formatPrice(prod.revenue)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div>
+                  <h3 className="text-sm font-bold text-dark uppercase tracking-wider">Best-Selling Products</h3>
+                  <p className="text-[10px] text-gray-500 font-medium">Top performers during selected period</p>
+                </div>
               </div>
 
-              {/* Least Selling Products */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-center justify-center font-bold">
-                    <AlertCircle size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-dark uppercase tracking-wider">Least-Selling Products</h3>
-                    <p className="text-[10px] text-gray-500 font-medium">Low velocity items to monitor</p>
-                  </div>
-                </div>
-
-                {leastSellersPeriod.length === 0 ? (
-                  <p className="text-center py-6 text-xs text-gray-400 font-medium px-4">
-                    {isSingleProductNoComparison 
-                      ? 'No comparison available — only one product has recorded sales during this period.' 
-                      : 'No data available.'}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {leastSellersPeriod.map((prod) => (
-                      <div key={prod.name} className="p-3 rounded-lg bg-gray-50 flex items-center justify-between border border-gray-200">
+              {bestSellersPeriod.length === 0 ? (
+                <p className="text-center py-6 text-xs text-gray-400 font-medium">No product sales in this period.</p>
+              ) : (
+                <div className="space-y-2">
+                  {bestSellersPeriod.map((prod, idx) => (
+                    <div key={prod.name} className="p-3 rounded-lg bg-gray-50 flex items-center justify-between border border-gray-200">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
+                          idx === 0 ? 'bg-dark text-white' : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {idx + 1}
+                        </span>
                         <div>
                           <p className="text-xs font-bold text-dark">{prod.name}</p>
                           <p className="text-[10px] text-gray-500">{prod.quantity} units sold</p>
                         </div>
-                        <span className="text-xs font-bold text-gray-600">{formatPrice(prod.revenue)}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <span className="text-xs font-bold text-dark">{formatPrice(prod.revenue)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Product Classification: Fast-Moving vs. Slow-Moving */}
+            <div id="product-classification-section" className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-50">
+                <div>
+                  <h3 className="text-xs font-bold text-dark uppercase tracking-wider">Product Classification</h3>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Fast-Moving vs. Slow-Moving categorized by Sales Frequency and Volume for {getPeriodLabel()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded text-[11px] font-bold">
+                    {fastMovingCount} Fast-Moving
+                  </span>
+                  <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded text-[11px] font-bold">
+                    {slowMovingCount} Slow-Moving
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table id="product-classification-table" className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[10px] uppercase tracking-wider font-bold">
+                      <th className="p-3.5">Product</th>
+                      <th className="p-3.5 text-right">Sales Frequency</th>
+                      <th className="p-3.5 text-right">Sales Volume</th>
+                      <th className="p-3.5 text-center">Classification</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-xs">
+                    {sortedClassifiedProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-400 text-xs font-medium">
+                          No catalog products found.
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedClassifiedProducts.map((p) => (
+                        <tr key={p.id} id={`product-classification-row-${p.id}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="p-3.5 font-bold text-dark">
+                            {p.name}
+                            {p.category && (
+                              <span className="ml-2 text-[10px] font-normal text-gray-400 font-medium">
+                                ({p.category})
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-gray-700">
+                            {p.frequency} {p.frequency === 1 ? 'order' : 'orders'}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-gray-700">
+                            {p.volume} {p.volume === 1 ? 'unit' : 'units'}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className={`inline-block px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              p.classification === 'Fast-Moving'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {p.classification}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -712,6 +980,113 @@ const SalesReport = () => {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Tab 3: Inventory Turnover Table */}
+        {activeTab === 'inventory' && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-50">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-bold text-dark uppercase tracking-wider">Inventory Turnover Evaluation</h2>
+                  <span className="bg-gray-200 text-dark px-2 py-0.5 rounded text-[11px] font-bold border border-gray-300">
+                    {turnoverItems.length} {turnoverItems.length === 1 ? 'Item' : 'Items'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 font-medium mt-0.5">Period: {getPeriodLabel()}</p>
+              </div>
+
+              {/* Color Guide (Top-Right) */}
+              <div className="flex flex-col md:items-end gap-1 text-[11px] text-gray-600 bg-white md:bg-transparent p-2 md:p-0 rounded-lg border md:border-0 border-gray-200 self-stretch md:self-auto">
+                <div className="flex items-center gap-2.5 font-bold">
+                  <span className="text-[11px] font-bold text-dark">Turnover:</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> High
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span> Moderate
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-red-700">
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span> Low
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium">Relative to turnover in the selected period</p>
+              </div>
+            </div>
+
+            {isTurnoverLoading ? (
+              <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-dark" />
+                <p className="text-xs font-bold text-gray-500">Calculating inventory turnover for {getPeriodLabel()}...</p>
+              </div>
+            ) : turnoverError ? (
+              <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center border border-red-200">
+                  <AlertCircle size={20} />
+                </div>
+                <p className="text-xs font-bold text-red-600">{turnoverError}</p>
+                <button
+                  onClick={loadTurnover}
+                  className="px-3 py-1.5 text-xs font-bold bg-dark text-white rounded hover:bg-gray-800 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : sortedTurnoverItems.length === 0 ? (
+              <div className="p-12 text-center text-gray-400 text-xs font-medium">
+                No inventory items found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[10px] uppercase tracking-wider font-bold">
+                      <th className="p-3.5">Inventory Item</th>
+                      <th className="p-3.5 text-right">Beginning Stock</th>
+                      <th className="p-3.5 text-right">Used</th>
+                      <th className="p-3.5 text-right">Ending Stock</th>
+                      <th className="p-3.5 text-right">Turnover</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-xs">
+                    {sortedTurnoverItems.map((item) => {
+                      const turnoverDisplay = (item.turnover !== null && item.turnover !== undefined && !isNaN(item.turnover))
+                        ? `${item.turnover.toFixed(2)}×`
+                        : '—';
+                      const tier = turnoverTierMap.get(item.id) || 'low';
+                      const badgeClasses = tier === 'high'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : tier === 'moderate'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-red-50 text-red-700 border-red-200';
+
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="p-3.5 font-bold text-dark">
+                            {item.name}
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-gray-700">
+                            {formatQuantity(item.beginningStock)} <span className="text-gray-400 font-normal">{item.unit}</span>
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-gray-700">
+                            {formatQuantity(item.used)} <span className="text-gray-400 font-normal">{item.unit}</span>
+                          </td>
+                          <td className="p-3.5 text-right font-medium text-gray-700">
+                            {formatQuantity(item.endingStock)} <span className="text-gray-400 font-normal">{item.unit}</span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <span className={`inline-block px-2.5 py-1 rounded text-xs font-bold border ${badgeClasses}`}>
+                              {turnoverDisplay}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

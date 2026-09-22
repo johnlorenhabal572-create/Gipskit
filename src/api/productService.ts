@@ -59,6 +59,54 @@ export const deleteCategory = async (name: string): Promise<any> => {
   return data;
 };
 
+// Helper to calculate available whole menu servings from linked inventory and deduction quantities
+export const calculateAvailableServings = (product: any, inventoryList: any[]): number => {
+  if (!product || !Array.isArray(inventoryList) || inventoryList.length === 0) {
+    const rawStock = Number(product?.stock ?? 0);
+    return Math.max(0, Math.floor(isNaN(rawStock) ? 0 : rawStock));
+  }
+
+  const linkIds: string[] = Array.isArray(product.inventoryLinkIds) && product.inventoryLinkIds.length > 0
+    ? product.inventoryLinkIds
+    : (product.inventoryLinkId ? [product.inventoryLinkId] : []);
+
+  if (linkIds.length === 0) {
+    const rawStock = Number(product.stock ?? 0);
+    return Math.max(0, Math.floor(isNaN(rawStock) ? 0 : rawStock));
+  }
+
+  const ingredients: any[] = Array.isArray(product.ingredients) ? product.ingredients : [];
+
+  const capacities: number[] = linkIds.map((id: string) => {
+    const invItem = inventoryList.find((i: any) => String(i.id) === String(id) || String(i._id) === String(id));
+    if (!invItem) {
+      return 0;
+    }
+
+    const rawQty = Number(invItem.quantity ?? 0);
+    const validQty = (!isNaN(rawQty) && rawQty > 0) ? rawQty : 0;
+
+    const matchedIng = ingredients.find((ing: any) => ing && String(ing.inventoryId) === String(id));
+    const deductionQty = matchedIng ? Number(matchedIng.deductionQty) : undefined;
+
+    if (deductionQty !== undefined && !isNaN(deductionQty) && deductionQty > 0) {
+      const servings = Math.floor(validQty / deductionQty);
+      return (!isFinite(servings) || isNaN(servings) || servings < 0) ? 0 : servings;
+    }
+
+    // Legacy fallback: 1-to-1 deduction (raw stock as whole servings)
+    const legacyServings = Math.floor(validQty);
+    return (!isFinite(legacyServings) || isNaN(legacyServings) || legacyServings < 0) ? 0 : legacyServings;
+  });
+
+  if (capacities.length === 0) {
+    return 0;
+  }
+
+  const minCapacity = Math.min(...capacities);
+  return (!isFinite(minCapacity) || isNaN(minCapacity) || minCapacity < 0) ? 0 : Math.floor(minCapacity);
+};
+
 // Helper to get authorization headers from current session
 export const getAuthHeaders = (): Record<string, string> => {
   try {
@@ -132,11 +180,7 @@ export const fetchProducts = async (filters?: { category?: string; search?: stri
 
       if (linkIds.length > 0) {
         if (isInventoryReady) {
-          const quantities = linkIds.map(id => {
-            const invItem = inventoryList.find((i: any) => String(i.id) === String(id) || String(i._id) === String(id));
-            return invItem ? Number(invItem.quantity ?? 0) : 0;
-          });
-          const availableStock = Math.min(...quantities);
+          const availableStock = calculateAvailableServings(p, inventoryList);
           return { 
             ...p, 
             stock: availableStock, 
@@ -283,11 +327,7 @@ export const getProducts = () => {
 
     if (linkIds.length > 0) {
       if (hasInventory) {
-        const quantities = linkIds.map(id => {
-          const invItem = inventory.find((i: any) => String(i.id) === String(id) || String(i._id) === String(id));
-          return invItem ? Number(invItem.quantity ?? 0) : 0;
-        });
-        const availableStock = Math.min(...quantities);
+        const availableStock = calculateAvailableServings(p, inventory);
         return { 
           ...p, 
           stock: availableStock, 

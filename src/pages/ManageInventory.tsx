@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   fetchInventory, 
   createInventoryItem, 
@@ -24,7 +24,8 @@ import {
   Loader2,
   SlidersHorizontal,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ArrowUpDown
 } from 'lucide-react';
 
 const ManageInventory = () => {
@@ -34,6 +35,7 @@ const ManageInventory = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [quantitySort, setQuantitySort] = useState<'high-to-low' | 'low-to-high'>('high-to-low');
 
   // Creation / Edit states
   const [isAdding, setIsAdding] = useState(false);
@@ -201,6 +203,33 @@ const ManageInventory = () => {
     item.unit?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const sortedInventory = useMemo(() => {
+    return [...filteredInventory].sort((a, b) => {
+      const aThreshold = a.lowStockThreshold !== undefined ? a.lowStockThreshold : 10;
+      const bThreshold = b.lowStockThreshold !== undefined ? b.lowStockThreshold : 10;
+
+      const aLow = Number(a.quantity ?? 0) <= aThreshold;
+      const bLow = Number(b.quantity ?? 0) <= bThreshold;
+
+      // Low-stock items must ALWAYS appear before normal-stock items
+      if (aLow && !bLow) return -1;
+      if (!aLow && bLow) return 1;
+
+      // Within the same stock group (both low or both normal), sort by quantity
+      const aQty = Number(a.quantity ?? 0);
+      const bQty = Number(b.quantity ?? 0);
+
+      if (aQty !== bQty) {
+        return quantitySort === 'high-to-low' ? bQty - aQty : aQty - bQty;
+      }
+
+      // If two items have the same quantity, use item name as alphabetical A -> Z tie-breaker
+      const aName = (a.name || '').trim();
+      const bName = (b.name || '').trim();
+      return aName.localeCompare(bName);
+    });
+  }, [filteredInventory, quantitySort]);
+
   const lowStockCount = inventory.filter(item => item.quantity <= (item.lowStockThreshold || 10)).length;
 
   return (
@@ -248,16 +277,35 @@ const ManageInventory = () => {
         {/* Manage Inventory Content */}
         {activeTab === 'inventory' && (
           <div className="space-y-4">
-            {/* Search Filter */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search raw materials, units, or items..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium focus:outline-none focus:border-dark text-dark"
-              />
+            {/* Search Filter & Quantity Sorting Control */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input 
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search raw materials, units, or items..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg text-xs font-medium focus:outline-none focus:border-dark text-dark"
+                />
+              </div>
+
+              {/* Compact Quantity Sorting Control */}
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-300 shrink-0">
+                <label htmlFor="inventory-quantity-sort" className="text-xs font-bold text-gray-600 whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+                  <ArrowUpDown size={14} className="text-gray-400" />
+                  <span>Sort: Quantity</span>
+                </label>
+                <select
+                  id="inventory-quantity-sort"
+                  value={quantitySort}
+                  onChange={(e) => setQuantitySort(e.target.value as 'high-to-low' | 'low-to-high')}
+                  className="bg-transparent text-xs font-bold text-dark focus:outline-none cursor-pointer py-1 pr-1 border-0"
+                >
+                  <option value="high-to-low">High → Low</option>
+                  <option value="low-to-high">Low → High</option>
+                </select>
+              </div>
             </div>
 
             {/* Desktop Table */}
@@ -338,7 +386,7 @@ const ManageInventory = () => {
                     )}
                   </AnimatePresence>
 
-                  {filteredInventory.map((item, idx) => {
+                  {sortedInventory.map((item, idx) => {
                     const isLow = item.quantity <= (item.lowStockThreshold || 10);
                     const itemKey = item.id ? `inv-row-${item.id}` : `inv-row-idx-${idx}`;
                     return (
@@ -541,7 +589,7 @@ const ManageInventory = () => {
                 )}
               </AnimatePresence>
 
-              {filteredInventory.map((item, idx) => {
+              {sortedInventory.map((item, idx) => {
                 const isLow = item.quantity <= (item.lowStockThreshold || 10);
                 const cardKey = item.id ? `inv-card-${item.id}` : `inv-card-idx-${idx}`;
                 return (

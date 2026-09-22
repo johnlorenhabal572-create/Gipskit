@@ -27,8 +27,8 @@ router.get('/', async (req: Request, res: Response) => {
       filter.name = { $regex: String(search), $options: 'i' };
     }
 
-    // Customers or availableOnly requests only get 'Available' products
-    if (availableOnly === 'true' || (!isStaff && req.headers['x-user-role'] === 'customer')) {
+    // Only filter by 'Available' status if explicitly requested via availableOnly query parameter
+    if (availableOnly === 'true') {
       filter.status = 'Available';
     }
 

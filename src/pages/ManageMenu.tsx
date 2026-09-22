@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { fetchProducts, createProduct, editProduct, removeProduct, fetchCategories, createCategory, deleteCategory, CATEGORIES } from '../api/productService';
+import { fetchProducts, createProduct, editProduct, removeProduct, fetchCategories, createCategory, deleteCategory, CATEGORIES, calculateAvailableServings } from '../api/productService';
 import { fetchInventory, getInventory } from '../api/inventoryService';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Edit2, X, Link as LinkIcon, Image as ImageIcon, Upload, Loader2, Tag, FolderPlus, FolderMinus, Search, Utensils, MoreVertical } from 'lucide-react';
@@ -146,17 +146,6 @@ const ManageMenu = () => {
       ? formData.inventoryLinkIds
       : (formData.inventoryLinkId ? [formData.inventoryLinkId] : []);
 
-    let computedStock = 0;
-    if (linkIds.length > 0) {
-      const quantities = linkIds.map(id => {
-        const inv = inventory.find((i: any) => i.id === id);
-        return inv ? inv.quantity : 0;
-      });
-      computedStock = Math.min(...quantities);
-    }
-
-    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
-
     // Resolve ingredients with deductionQty for each linked item
     const resolvedIngredients = linkIds.map(id => {
       const match = (formData.ingredients || []).find((ing: any) => ing && String(ing.inventoryId) === String(id));
@@ -174,6 +163,12 @@ const ManageMenu = () => {
         return;
       }
     }
+
+    const computedStock = linkIds.length > 0
+      ? calculateAvailableServings({ inventoryLinkIds: linkIds, ingredients: resolvedIngredients }, inventory)
+      : (formData.stock || 0);
+
+    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
 
     try {
       const newProd = await createProduct({
@@ -214,17 +209,6 @@ const ManageMenu = () => {
       ? product.inventoryLinkIds
       : (product.inventoryLinkId ? [product.inventoryLinkId] : []);
 
-    let computedStock = 0;
-    if (linkIds.length > 0) {
-      const quantities = linkIds.map(id => {
-        const inv = inventory.find((i: any) => i.id === id);
-        return inv ? inv.quantity : 0;
-      });
-      computedStock = Math.min(...quantities);
-    } else {
-      computedStock = product.stock || 0;
-    }
-
     const existingIngredients: { inventoryId: string; deductionQty: number }[] = Array.isArray(product.ingredients)
       ? product.ingredients
       : [];
@@ -236,6 +220,10 @@ const ManageMenu = () => {
         deductionQty: match && match.deductionQty !== undefined ? match.deductionQty : 1
       };
     });
+
+    const computedStock = linkIds.length > 0
+      ? calculateAvailableServings({ inventoryLinkIds: linkIds, ingredients: loadedIngredients }, inventory)
+      : (product.stock || 0);
 
     setFormData({
       name: product.name,
@@ -266,17 +254,6 @@ const ManageMenu = () => {
       ? formData.inventoryLinkIds
       : (formData.inventoryLinkId ? [formData.inventoryLinkId] : []);
 
-    let computedStock = 0;
-    if (linkIds.length > 0) {
-      const quantities = linkIds.map(id => {
-        const inv = inventory.find((i: any) => i.id === id);
-        return inv ? inv.quantity : 0;
-      });
-      computedStock = Math.min(...quantities);
-    }
-
-    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
-
     const resolvedIngredients = linkIds.map(id => {
       const match = (formData.ingredients || []).find((ing: any) => ing && String(ing.inventoryId) === String(id));
       const val = match ? parseFloat(String(match.deductionQty)) : 1;
@@ -293,6 +270,12 @@ const ManageMenu = () => {
         return;
       }
     }
+
+    const computedStock = linkIds.length > 0
+      ? calculateAvailableServings({ inventoryLinkIds: linkIds, ingredients: resolvedIngredients }, inventory)
+      : (formData.stock || 0);
+
+    const effectiveStatus = (linkIds.length > 0 && computedStock === 0) ? 'Not Available' : formData.status;
 
     const updated = { 
       ...formData, 
@@ -694,10 +677,7 @@ const ManageMenu = () => {
                                         ? formData.ingredients
                                         : [...(formData.ingredients || []), { inventoryId: item.id, deductionQty: 1 }];
                                     const nextStock = next.length > 0
-                                      ? Math.min(...next.map(id => {
-                                          const inv = inventory.find((i: any) => i.id === id);
-                                          return inv ? inv.quantity : 0;
-                                        }))
+                                      ? calculateAvailableServings({ inventoryLinkIds: next, ingredients: nextIngredients }, inventory)
                                       : 0;
                                     setFormData({
                                       ...formData,
@@ -778,7 +758,15 @@ const ManageMenu = () => {
                                         } else {
                                           updatedIngs.push({ inventoryId: id, deductionQty: val });
                                         }
-                                        setFormData({ ...formData, ingredients: updatedIngs });
+                                        const nextStock = formData.inventoryLinkIds.length > 0
+                                          ? calculateAvailableServings({ inventoryLinkIds: formData.inventoryLinkIds, ingredients: updatedIngs }, inventory)
+                                          : 0;
+                                        setFormData({ 
+                                          ...formData, 
+                                          ingredients: updatedIngs,
+                                          stock: nextStock,
+                                          status: (formData.inventoryLinkIds.length > 0 && nextStock === 0) ? 'Not Available' : formData.status
+                                        });
                                       }}
                                       className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500 bg-white text-dark font-medium"
                                       placeholder="1"
@@ -794,10 +782,7 @@ const ManageMenu = () => {
                                       const next = formData.inventoryLinkIds.filter(i => i !== id);
                                       const nextIngredients = (formData.ingredients || []).filter((ing: any) => ing && String(ing.inventoryId) !== String(id));
                                       const nextStock = next.length > 0
-                                        ? Math.min(...next.map(linkId => {
-                                            const invItem = inventory.find((i: any) => i.id === linkId);
-                                            return invItem ? invItem.quantity : 0;
-                                          }))
+                                        ? calculateAvailableServings({ inventoryLinkIds: next, ingredients: nextIngredients }, inventory)
                                         : 0;
                                       setFormData({ 
                                         ...formData, 

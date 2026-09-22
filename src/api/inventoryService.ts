@@ -243,3 +243,30 @@ export const deductInventory = (inventoryId: string, amount: number, orderId?: s
     return item;
   });
 };
+
+export interface InventoryTurnoverItem {
+  id: string;
+  name: string;
+  unit: string;
+  beginningStock: number;
+  used: number;
+  endingStock: number;
+  averageInventory: number;
+  turnover: number | null;
+}
+
+// Fetch calculated inventory turnover from backend for a specific period
+export const fetchInventoryTurnover = async (startDate: string, endDate: string): Promise<InventoryTurnoverItem[]> => {
+  const params = new URLSearchParams({ startDate, endDate });
+  const res = await fetch(`/api/inventory/turnover?${params.toString()}`, {
+    headers: getAuthHeaders()
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch inventory turnover: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+};

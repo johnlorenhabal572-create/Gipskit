@@ -17,7 +17,6 @@ import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package } from 'luc
 const Dashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
-  const [reportPeriod, setReportPeriod] = useState<'daily' | 'all'>('daily');
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = async (isBackground = false) => {
@@ -50,16 +49,10 @@ const Dashboard = () => {
 
   const today = new Date().toDateString();
   const completedOrders = orders.filter(o => o.status === 'Completed');
-  
-  // Stats based on period
-  const statsOrders = reportPeriod === 'daily' 
-    ? completedOrders.filter(o => new Date(o.date).toDateString() === today)
-    : completedOrders;
-
-  const totalSales = statsOrders.reduce((sum, o) => sum + o.total, 0);
-  const headlineSales = totalSales;
-  
-  const lifetimeSales = completedOrders.reduce((sum, o) => sum + o.total, 0);
+  const todayOrders = completedOrders.filter(
+    o => new Date(o.date).toDateString() === today
+  );
+  const todaySales = todayOrders.reduce((sum, o) => sum + o.total, 0);
   
   const readyToPickupOrders = orders.filter(o => o.status === 'Ready to Pickup' || o.status === 'Ready for Pickup').length;
   const lowStockCount = inventory.filter(item => item.quantity <= (item.lowStockThreshold || 10)).length;
@@ -70,9 +63,9 @@ const Dashboard = () => {
     quantity: item.quantity,
   }));
 
-  // Prepare Product Rankings Data (Today vs All Time)
+  // Prepare Product Rankings Data (Today)
   const productSales: { [key: string]: number } = {};
-  statsOrders.forEach(order => {
+  todayOrders.forEach(order => {
     order.items.forEach((item: any) => {
       productSales[item.name] = (productSales[item.name] || 0) + item.quantity;
     });
@@ -93,43 +86,15 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 font-sans">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-6 flex items-center justify-end">
-          <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-            <button
-              onClick={() => setReportPeriod('daily')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
-                reportPeriod === 'daily' 
-                  ? 'bg-white text-dark border border-gray-200' 
-                  : 'text-gray-500 hover:text-dark'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setReportPeriod('all')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-colors ${
-                reportPeriod === 'all' 
-                  ? 'bg-white text-dark border border-gray-200' 
-                  : 'text-gray-500 hover:text-dark'
-              }`}
-            >
-              All-Time
-            </button>
-          </div>
-        </header>
-
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {/* Total Sales */}
           <div className="bg-white p-5 rounded-xl border border-gray-200 flex justify-between items-center">
             <div>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                {reportPeriod === 'daily' ? "Today's Sales" : "Lifetime Sales"}
+                Today's Sales
               </p>
-              <h3 className="text-2xl font-black text-dark tracking-tight">{formatPrice(headlineSales)}</h3>
-              {reportPeriod === 'daily' && (
-                <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Overall: {formatPrice(lifetimeSales)}</p>
-              )}
+              <h3 className="text-2xl font-black text-dark tracking-tight">{formatPrice(todaySales)}</h3>
             </div>
             <div className="w-10 h-10 bg-green-50 text-green-700 border border-green-200 rounded-lg flex items-center justify-center">
               <DollarSign size={20} />
@@ -209,7 +174,7 @@ const Dashboard = () => {
                 <TrendingUp size={16} />
               </div>
               <h2 className="text-sm font-bold text-dark uppercase tracking-wider">
-                Top Ordered Items ({reportPeriod === 'daily' ? "Today" : "All-Time"})
+                Top Ordered Items (Today)
               </h2>
             </div>
             <div className="h-[300px] w-full">
