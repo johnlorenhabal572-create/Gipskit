@@ -4,6 +4,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { X, Eye, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
+import { calculateTotalOrderQuantity, getAggregatedOrderItems, formatQuantityValue } from '../utils/orderItemUtils';
 
 const AdminDashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -14,8 +15,11 @@ const AdminDashboard = () => {
   const [updatingOrders, setUpdatingOrders] = useState<Record<string, string>>({});
   const { markAdminOrdersAsRead } = useNotifications();
   const hasMarkedReadRef = useRef(false);
+  const isFetchingRef = useRef(false);
 
   const loadOrders = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const data = await fetchOrders();
       const orderList = data || [];
@@ -31,14 +35,32 @@ const AdminDashboard = () => {
       console.error('Failed to load orders in AdminDashboard:', err);
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     hasMarkedReadRef.current = false;
     loadOrders();
-    const interval = setInterval(loadOrders, 5000);
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        loadOrders();
+      }
+    }, 20000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
@@ -228,12 +250,11 @@ const AdminDashboard = () => {
                       </div>
 
                       <div>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Ordered Products ({order.items?.length || 0})</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Ordered Products ({calculateTotalOrderQuantity(order.items || [])})</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {order.items?.map((item: any, idx: number) => (
+                          {getAggregatedOrderItems(order.items || []).map((item: any, idx: number) => (
                             <div key={`${item.id || item.name}-${idx}`} className="bg-gray-50 px-2.5 py-1 rounded-md text-xs font-bold border border-gray-200 flex items-center gap-1.5 text-dark">
-                              <span className="text-primary font-black">{item.quantity}×</span>
-                              <span>{item.name}</span>
+                              <span>{item.name} ×{formatQuantityValue(item.quantity)}</span>
                               {item.price && (
                                 <span className="text-gray-400 text-[11px] font-normal">({formatPrice(item.price * item.quantity)})</span>
                               )}

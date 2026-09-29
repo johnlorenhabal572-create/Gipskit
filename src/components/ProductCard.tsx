@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, X, Check, Package, Tag, AlertCircle, LogIn, ShoppingBag } from 'lucide-react';
+import { X, Check, Package, Tag, AlertCircle, LogIn, ShoppingBag } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatPrice } from '../utils/format';
 
@@ -55,11 +55,6 @@ const ProductCard = ({ product }: { product: any }) => {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy="no-referrer"
             />
-            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <span className="bg-white/95 text-dark p-2 rounded-lg text-xs font-bold shadow flex items-center justify-center" title="View Details">
-                <Eye size={16} />
-              </span>
-            </div>
             {!isAvailable && (
               <div className="absolute inset-0 bg-dark/70 flex items-center justify-center">
                 <span className="bg-white text-dark px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border border-gray-300">
@@ -109,7 +104,7 @@ const ProductCard = ({ product }: { product: any }) => {
           )}
         </div>
         
-        {/* Action Buttons: View (Eye icon) & Order (Plus icon) */}
+        {/* Action Buttons: View & Add */}
         <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
           <button 
             type="button"
@@ -119,7 +114,7 @@ const ProductCard = ({ product }: { product: any }) => {
             title="View Details"
             aria-label="View Details"
           >
-            <Eye size={16} />
+            View
           </button>
 
           {!user ? (
@@ -131,7 +126,7 @@ const ProductCard = ({ product }: { product: any }) => {
               title="Order"
               aria-label="Order"
             >
-              <Plus size={16} />
+              Add
             </button>
           ) : (
             <button 
@@ -149,11 +144,7 @@ const ProductCard = ({ product }: { product: any }) => {
                   : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
               }`}
             >
-              {addedNotice ? (
-                <Check size={16} />
-              ) : (
-                <Plus size={16} />
-              )}
+              {addedNotice ? 'Added' : 'Add'}
             </button>
           )}
         </div>

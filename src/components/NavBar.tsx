@@ -164,7 +164,7 @@ const Navbar = () => {
         {
           title: 'Main Menu',
           links: [
-            { name: 'Home', path: '/', icon: <Home size={20} /> },
+            { name: 'Dashboard', path: '/', icon: <Home size={20} /> },
             { name: 'Menu', path: '/menu', icon: <Utensils size={20} /> },
             { name: 'About', path: '/about', icon: <Info size={20} /> },
           ]
@@ -231,7 +231,7 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {(user?.role === 'customer' || !user) && (
+            {(user?.role === 'customer' || !user) && location.pathname !== '/login' && (
               <button 
                 id="header-cart-btn"
                 onClick={() => setIsCartOpen(true)} 
@@ -248,14 +248,16 @@ const Navbar = () => {
             )}
 
             {!user ? (
-              <Link 
-                id="header-signin-btn"
-                to="/login" 
-                className="bg-primary text-white hover:bg-primary/90 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center gap-1.5 active:translate-y-0.5"
-              >
-                <User size={15} />
-                <span>Sign In</span>
-              </Link>
+              location.pathname !== '/login' && (
+                <Link 
+                  id="header-signin-btn"
+                  to="/login" 
+                  className="bg-primary text-white hover:bg-primary/90 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center gap-1.5 active:translate-y-0.5"
+                >
+                  <User size={15} />
+                  <span>Sign In</span>
+                </Link>
+              )
             ) : (
               <div ref={profileDropdownRef} className="relative flex items-center gap-2 pl-2 border-l border-gray-200">
                 <div 
@@ -311,7 +313,7 @@ const Navbar = () => {
                           {user.name}
                         </h4>
 
-                        {/* Gmail address */}
+                        {/* Email address */}
                         <p 
                           id="profile-dropdown-email" 
                           className="text-xs text-gray-500 mt-0.5 break-all font-medium"
@@ -444,40 +446,6 @@ const Navbar = () => {
               </div>
             ))}
           </nav>
-
-          {/* User Section */}
-          <div className="pt-4 border-t border-gray-200 mt-auto">
-            {user ? (
-              <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 bg-primary text-white rounded-full font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border border-primary/20">
-                    <span className="leading-none tracking-tight font-black">
-                      {getFirstNameInitials(user.name)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold truncate text-dark">{user.name}</p>
-                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{user.role}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={handleLogout} 
-                  className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors" 
-                  title="Logout"
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
-            ) : (
-              <Link 
-                to="/login" 
-                className="w-full bg-dark text-white py-3 rounded-lg font-bold text-xs uppercase tracking-wider hover:bg-dark/90 transition-colors flex items-center justify-center gap-2"
-                onClick={() => setIsSidebarOpen(false)}
-              >
-                <User size={16} /> Sign In / Sign Up
-              </Link>
-            )}
-          </div>
         </div>
       </aside>
 

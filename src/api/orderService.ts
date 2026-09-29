@@ -23,13 +23,16 @@ let ordersCache: any[] = [];
 let isCacheLoaded = false;
 
 // 1. Fetch orders from MongoDB backend
-export async function fetchOrders(filters?: { status?: string; email?: string; orderType?: string; search?: string }): Promise<any[]> {
+export async function fetchOrders(filters?: { status?: string; email?: string; orderType?: string; search?: string; orderIds?: string[] }): Promise<any[]> {
   try {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.email) params.append('email', filters.email);
     if (filters?.orderType) params.append('orderType', filters.orderType);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.orderIds && filters.orderIds.length > 0) {
+      params.append('orderIds', filters.orderIds.join(','));
+    }
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const res = await fetch(`/api/orders${queryString}`, {
@@ -41,11 +44,25 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
     }
 
     const data = await res.json();
-    ordersCache = Array.isArray(data) ? data : [];
-    isCacheLoaded = true;
-    return ordersCache;
+    const result = Array.isArray(data) ? data : [];
+
+    // Only update global full cache if fetching without customer-specific subsets
+    const hasSpecificFilter = Boolean(filters?.email || (filters?.orderIds && filters.orderIds.length > 0));
+    if (!hasSpecificFilter) {
+      ordersCache = result;
+      isCacheLoaded = true;
+    }
+    return result;
   } catch (error) {
     console.warn('Backend orders fetch failed, using cached state:', error);
+    if (filters?.email || (filters?.orderIds && filters.orderIds.length > 0)) {
+      const targetEmail = filters.email?.toLowerCase();
+      const targetIds = filters.orderIds || [];
+      return ordersCache.filter(o => 
+        (targetEmail && (o.userEmail?.toLowerCase() === targetEmail || o.customer?.email?.toLowerCase() === targetEmail)) ||
+        (targetIds.includes(o.id))
+      );
+    }
     return ordersCache;
   }
 }

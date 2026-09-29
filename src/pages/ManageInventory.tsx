@@ -28,6 +28,23 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 
+// Helper to parse and normalize decimal numbers without floating-point artifacts or unwanted trailing zeros
+const normalizeQuantity = (val: string | number | undefined | null, fallback = 0): number => {
+  if (val === undefined || val === null || val === '') return fallback;
+  const num = typeof val === 'number' ? val : parseFloat(String(val).trim());
+  if (isNaN(num)) return fallback;
+  // Round to 6 decimal places to clean up any JS binary floating-point drift, then convert back to standard number
+  return Number(num.toFixed(6));
+};
+
+// Formats a number or string for display, trimming trailing zeros (e.g. 20.500 -> "20.5", 20.000 -> "20")
+const formatDisplayQuantity = (val: string | number | undefined | null): string => {
+  if (val === undefined || val === null || val === '') return '0';
+  const num = typeof val === 'number' ? val : parseFloat(String(val).trim());
+  if (isNaN(num)) return String(val);
+  return String(Number(num.toFixed(6)));
+};
+
 const ManageInventory = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -37,24 +54,42 @@ const ManageInventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [quantitySort, setQuantitySort] = useState<'high-to-low' | 'low-to-high'>('high-to-low');
 
-  // Creation / Edit states
+  // Creation / Edit states (using string | number so users can type decimals naturally without premature truncation)
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [newItem, setNewItem] = useState({ name: '', quantity: 0, unit: 'pcs', stableQuantity: 0, lowStockThreshold: 10 });
-  const [editItem, setEditItem] = useState({ name: '', quantity: 0, unit: 'pcs', stableQuantity: 0, lowStockThreshold: 10 });
+  const [newItem, setNewItem] = useState<{
+    name: string;
+    quantity: string | number;
+    unit: string;
+    stableQuantity: string | number;
+    lowStockThreshold: string | number;
+  }>({ name: '', quantity: '0', unit: 'pcs', stableQuantity: '0', lowStockThreshold: '10' });
+
+  const [editItem, setEditItem] = useState<{
+    name: string;
+    quantity: string | number;
+    unit: string;
+    stableQuantity: string | number;
+    lowStockThreshold: string | number;
+  }>({ name: '', quantity: '0', unit: 'pcs', stableQuantity: '0', lowStockThreshold: '10' });
 
   // Quick Stock Adjustment Modal state
   const [adjustingItem, setAdjustingItem] = useState<any | null>(null);
   const [adjustType, setAdjustType] = useState<'stock-in' | 'stock-out' | 'manual-adjustment'>('stock-in');
-  const [adjustAmount, setAdjustAmount] = useState<number>(1);
+  const [adjustAmount, setAdjustAmount] = useState<string | number>('1');
   const [adjustReason, setAdjustReason] = useState<string>('');
 
   const UNIT_OPTIONS = ['pcs', 'kg', 'pack', 'bottle', 'can', 'box', 'liter', 'ml', 'g'];
   const { acknowledgeLowStock } = useNotifications();
   const hasAcknowledgedRef = useRef(false);
+  const isFetchingRef = useRef(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (isBackground = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!isBackground) {
+      setIsLoading(true);
+    }
     try {
       const [itemsData, logsData] = await Promise.all([
         fetchInventory(),
@@ -66,8 +101,8 @@ const ManageInventory = () => {
 
       // Check if there are unacknowledged low-stock items being viewed
       const hasUnacknowledgedLowStock = items.some(item => {
-        const threshold = item.lowStockThreshold !== undefined ? item.lowStockThreshold : 10;
-        return item.quantity <= threshold && item.lowStockAcknowledged !== true;
+        const threshold = item.lowStockThreshold !== undefined ? Number(item.lowStockThreshold) : 10;
+        return Number(item.quantity ?? 0) <= threshold && item.lowStockAcknowledged !== true;
       });
 
       if (hasUnacknowledgedLowStock && !hasAcknowledgedRef.current) {
@@ -77,15 +112,35 @@ const ManageInventory = () => {
     } catch (err: any) {
       console.error('Error loading inventory data:', err);
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     hasAcknowledgedRef.current = false;
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        loadData(true);
+      }
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const handleAdd = async () => {
@@ -93,8 +148,21 @@ const ManageInventory = () => {
       setErrorMessage('Item name is required');
       return;
     }
-    if (newItem.quantity < 0) {
+    const parsedQty = normalizeQuantity(newItem.quantity, 0);
+    if (parsedQty < 0) {
       setErrorMessage('Quantity cannot be negative');
+      return;
+    }
+
+    const parsedStable = normalizeQuantity(newItem.stableQuantity, 0);
+    if (parsedStable < 0) {
+      setErrorMessage('Stable quantity cannot be negative');
+      return;
+    }
+
+    const parsedThreshold = normalizeQuantity(newItem.lowStockThreshold, 10);
+    if (parsedThreshold < 0) {
+      setErrorMessage('Low stock threshold cannot be negative');
       return;
     }
 
@@ -102,15 +170,16 @@ const ManageInventory = () => {
     try {
       const created = await createInventoryItem({
         ...newItem,
-        stableQuantity: newItem.stableQuantity || 0,
-        lowStockThreshold: newItem.lowStockThreshold || 10
+        quantity: parsedQty,
+        stableQuantity: parsedStable,
+        lowStockThreshold: parsedThreshold
       });
       setInventory(prev => {
         // Prevent duplicate items in state
         const exists = prev.some(i => i.id === created.id);
         return exists ? prev.map(i => i.id === created.id ? created : i) : [...prev, created];
       });
-      setNewItem({ name: '', quantity: 0, unit: 'pcs', stableQuantity: 0, lowStockThreshold: 10 });
+      setNewItem({ name: '', quantity: '0', unit: 'pcs', stableQuantity: '0', lowStockThreshold: '10' });
       setIsAdding(false);
       // Refresh logs
       fetchInventoryLogs(undefined, 100).then(setLogs).catch(console.error);
@@ -135,10 +204,10 @@ const ManageInventory = () => {
     setEditingId(item.id);
     setEditItem({ 
       name: item.name, 
-      quantity: item.quantity, 
+      quantity: formatDisplayQuantity(item.quantity), 
       unit: item.unit || 'pcs', 
-      stableQuantity: item.stableQuantity || 0, 
-      lowStockThreshold: item.lowStockThreshold || 10 
+      stableQuantity: formatDisplayQuantity(item.stableQuantity ?? 0), 
+      lowStockThreshold: formatDisplayQuantity(item.lowStockThreshold ?? 10) 
     });
   };
 
@@ -147,13 +216,31 @@ const ManageInventory = () => {
       alert('Item name is required');
       return;
     }
-    if (editItem.quantity < 0) {
+    const parsedQty = normalizeQuantity(editItem.quantity, 0);
+    if (parsedQty < 0) {
       alert('Quantity cannot be negative');
       return;
     }
 
+    const parsedStable = normalizeQuantity(editItem.stableQuantity, 0);
+    if (parsedStable < 0) {
+      alert('Stable quantity cannot be negative');
+      return;
+    }
+
+    const parsedThreshold = normalizeQuantity(editItem.lowStockThreshold, 10);
+    if (parsedThreshold < 0) {
+      alert('Low stock threshold cannot be negative');
+      return;
+    }
+
     try {
-      const updated = await updateInventoryItem(editingId!, editItem);
+      const updated = await updateInventoryItem(editingId!, {
+        ...editItem,
+        quantity: parsedQty,
+        stableQuantity: parsedStable,
+        lowStockThreshold: parsedThreshold
+      });
       setInventory(prev => prev.map(item => item.id === editingId ? updated : item));
       setEditingId(null);
       fetchInventoryLogs(undefined, 100).then(setLogs).catch(console.error);
@@ -165,17 +252,19 @@ const ManageInventory = () => {
   const handleOpenAdjust = (item: any, type: 'stock-in' | 'stock-out' | 'manual-adjustment') => {
     setAdjustingItem(item);
     setAdjustType(type);
-    setAdjustAmount(type === 'manual-adjustment' ? item.quantity : 1);
+    setAdjustAmount(type === 'manual-adjustment' ? formatDisplayQuantity(item.quantity) : '1');
     setAdjustReason('');
   };
 
   const handleApplyAdjust = async () => {
     if (!adjustingItem) return;
-    if (adjustType === 'manual-adjustment' && adjustAmount < 0) {
+    const parsedAmount = normalizeQuantity(adjustAmount, 0);
+
+    if (adjustType === 'manual-adjustment' && parsedAmount < 0) {
       alert('Manual quantity cannot be negative');
       return;
     }
-    if ((adjustType === 'stock-in' || adjustType === 'stock-out') && adjustAmount <= 0) {
+    if ((adjustType === 'stock-in' || adjustType === 'stock-out') && parsedAmount <= 0) {
       alert('Amount must be greater than 0');
       return;
     }
@@ -183,8 +272,8 @@ const ManageInventory = () => {
     try {
       const result = await adjustInventoryStock(adjustingItem.id, {
         type: adjustType,
-        amount: adjustType !== 'manual-adjustment' ? adjustAmount : undefined,
-        newQuantity: adjustType === 'manual-adjustment' ? adjustAmount : undefined,
+        amount: adjustType !== 'manual-adjustment' ? parsedAmount : undefined,
+        newQuantity: adjustType === 'manual-adjustment' ? parsedAmount : undefined,
         reason: adjustReason.trim() || undefined
       });
 
@@ -230,7 +319,7 @@ const ManageInventory = () => {
     });
   }, [filteredInventory, quantitySort]);
 
-  const lowStockCount = inventory.filter(item => item.quantity <= (item.lowStockThreshold || 10)).length;
+  const lowStockCount = inventory.filter(item => Number(item.quantity ?? 0) <= Number(item.lowStockThreshold ?? 10)).length;
 
   return (
     <div className="min-h-screen bg-white p-6">
@@ -338,18 +427,22 @@ const ManageInventory = () => {
                         <td className="p-3">
                           <input 
                             type="number" 
+                            step="any"
                             min="0"
                             value={newItem.quantity}
-                            onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
+                            onBlur={() => setNewItem(prev => ({ ...prev, quantity: formatDisplayQuantity(prev.quantity) }))}
                             className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark"
                           />
                         </td>
                         <td className="p-3">
                           <input 
                             type="number" 
+                            step="any"
                             min="0"
                             value={newItem.stableQuantity}
-                            onChange={(e) => setNewItem({...newItem, stableQuantity: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setNewItem({...newItem, stableQuantity: e.target.value})}
+                            onBlur={() => setNewItem(prev => ({ ...prev, stableQuantity: formatDisplayQuantity(prev.stableQuantity) }))}
                             className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs text-dark"
                             placeholder="Stable Qty"
                           />
@@ -357,9 +450,11 @@ const ManageInventory = () => {
                         <td className="p-3">
                           <input 
                             type="number" 
+                            step="any"
                             min="0"
                             value={newItem.lowStockThreshold}
-                            onChange={(e) => setNewItem({...newItem, lowStockThreshold: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setNewItem({...newItem, lowStockThreshold: e.target.value})}
+                            onBlur={() => setNewItem(prev => ({ ...prev, lowStockThreshold: formatDisplayQuantity(prev.lowStockThreshold) }))}
                             className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs text-dark"
                             placeholder="Alert at..."
                           />
@@ -387,7 +482,7 @@ const ManageInventory = () => {
                   </AnimatePresence>
 
                   {sortedInventory.map((item, idx) => {
-                    const isLow = item.quantity <= (item.lowStockThreshold || 10);
+                    const isLow = Number(item.quantity ?? 0) <= Number(item.lowStockThreshold ?? 10);
                     const itemKey = item.id ? `inv-row-${item.id}` : `inv-row-idx-${idx}`;
                     return (
                       <tr key={itemKey} className="hover:bg-gray-50 transition-colors">
@@ -415,15 +510,17 @@ const ManageInventory = () => {
                           {editingId === item.id ? (
                             <input 
                               type="number" 
+                              step="any"
                               min="0"
                               value={editItem.quantity}
-                              onChange={(e) => setEditItem({...editItem, quantity: parseInt(e.target.value) || 0})}
+                              onChange={(e) => setEditItem({...editItem, quantity: e.target.value})}
+                              onBlur={() => setEditItem(prev => ({ ...prev, quantity: formatDisplayQuantity(prev.quantity) }))}
                               className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs font-bold text-dark"
                             />
                           ) : (
                             <div className="flex items-center gap-2">
                               <span className={`text-sm font-black ${isLow ? 'text-red-600' : 'text-dark'}`}>
-                                {item.quantity}
+                                {formatDisplayQuantity(item.quantity)}
                               </span>
                               <span className="text-xs text-gray-500">{item.unit}</span>
                               {isLow && (
@@ -438,26 +535,30 @@ const ManageInventory = () => {
                           {editingId === item.id ? (
                             <input 
                               type="number" 
+                              step="any"
                               min="0"
                               value={editItem.stableQuantity}
-                              onChange={(e) => setEditItem({...editItem, stableQuantity: parseInt(e.target.value) || 0})}
+                              onChange={(e) => setEditItem({...editItem, stableQuantity: e.target.value})}
+                              onBlur={() => setEditItem(prev => ({ ...prev, stableQuantity: formatDisplayQuantity(prev.stableQuantity) }))}
                               className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs text-dark"
                             />
                           ) : (
-                            <span className="text-gray-600 text-xs font-medium">{item.stableQuantity || 0}</span>
+                            <span className="text-gray-600 text-xs font-medium">{formatDisplayQuantity(item.stableQuantity)}</span>
                           )}
                         </td>
                         <td className="p-4">
                           {editingId === item.id ? (
                             <input 
                               type="number" 
+                              step="any"
                               min="0"
                               value={editItem.lowStockThreshold}
-                              onChange={(e) => setEditItem({...editItem, lowStockThreshold: parseInt(e.target.value) || 0})}
+                              onChange={(e) => setEditItem({...editItem, lowStockThreshold: e.target.value})}
+                              onBlur={() => setEditItem(prev => ({ ...prev, lowStockThreshold: formatDisplayQuantity(prev.lowStockThreshold) }))}
                               className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs text-dark"
                             />
                           ) : (
-                            <span className="text-gray-600 text-xs font-medium">{item.lowStockThreshold || 10}</span>
+                            <span className="text-gray-600 text-xs font-medium">{formatDisplayQuantity(item.lowStockThreshold ?? 10)}</span>
                           )}
                         </td>
                         <td className="p-4">
@@ -542,9 +643,11 @@ const ManageInventory = () => {
                         <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Quantity</label>
                         <input 
                           type="number" 
+                          step="any"
                           min="0"
                           value={newItem.quantity}
-                          onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
+                          onBlur={() => setNewItem(prev => ({ ...prev, quantity: formatDisplayQuantity(prev.quantity) }))}
                           className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs font-semibold text-dark"
                         />
                       </div>
@@ -552,9 +655,11 @@ const ManageInventory = () => {
                         <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Stable Qty</label>
                         <input 
                           type="number" 
+                          step="any"
                           min="0"
                           value={newItem.stableQuantity}
-                          onChange={(e) => setNewItem({...newItem, stableQuantity: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setNewItem({...newItem, stableQuantity: e.target.value})}
+                          onBlur={() => setNewItem(prev => ({ ...prev, stableQuantity: formatDisplayQuantity(prev.stableQuantity) }))}
                           className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-dark"
                         />
                       </div>
@@ -562,9 +667,11 @@ const ManageInventory = () => {
                         <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Alert At</label>
                         <input 
                           type="number" 
+                          step="any"
                           min="0"
                           value={newItem.lowStockThreshold}
-                          onChange={(e) => setNewItem({...newItem, lowStockThreshold: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setNewItem({...newItem, lowStockThreshold: e.target.value})}
+                          onBlur={() => setNewItem(prev => ({ ...prev, lowStockThreshold: formatDisplayQuantity(prev.lowStockThreshold) }))}
                           className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-dark"
                         />
                       </div>
@@ -590,7 +697,7 @@ const ManageInventory = () => {
               </AnimatePresence>
 
               {sortedInventory.map((item, idx) => {
-                const isLow = item.quantity <= (item.lowStockThreshold || 10);
+                const isLow = Number(item.quantity ?? 0) <= Number(item.lowStockThreshold ?? 10);
                 const cardKey = item.id ? `inv-card-${item.id}` : `inv-card-idx-${idx}`;
                 return (
                   <div key={cardKey} className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
@@ -605,20 +712,29 @@ const ManageInventory = () => {
                         <div className="grid grid-cols-3 gap-2">
                           <input 
                             type="number" 
+                            step="any"
+                            min="0"
                             value={editItem.quantity}
-                            onChange={(e) => setEditItem({...editItem, quantity: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setEditItem({...editItem, quantity: e.target.value})}
+                            onBlur={() => setEditItem(prev => ({ ...prev, quantity: formatDisplayQuantity(prev.quantity) }))}
                             className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs font-bold text-dark"
                           />
                           <input 
                             type="number" 
+                            step="any"
+                            min="0"
                             value={editItem.stableQuantity}
-                            onChange={(e) => setEditItem({...editItem, stableQuantity: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setEditItem({...editItem, stableQuantity: e.target.value})}
+                            onBlur={() => setEditItem(prev => ({ ...prev, stableQuantity: formatDisplayQuantity(prev.stableQuantity) }))}
                             className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-dark"
                           />
                           <input 
                             type="number" 
+                            step="any"
+                            min="0"
                             value={editItem.lowStockThreshold}
-                            onChange={(e) => setEditItem({...editItem, lowStockThreshold: parseInt(e.target.value) || 0})}
+                            onChange={(e) => setEditItem({...editItem, lowStockThreshold: e.target.value})}
+                            onBlur={() => setEditItem(prev => ({ ...prev, lowStockThreshold: formatDisplayQuantity(prev.lowStockThreshold) }))}
                             className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-dark"
                           />
                         </div>
@@ -659,18 +775,18 @@ const ManageInventory = () => {
                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Current</p>
                             <div className="flex items-center gap-1.5">
                               <span className={`text-base font-black ${isLow ? 'text-red-600' : 'text-dark'}`}>
-                                {item.quantity}
+                                {formatDisplayQuantity(item.quantity)}
                               </span>
                               {isLow && <AlertCircle size={12} className="text-red-600" />}
                             </div>
                           </div>
                           <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Stable</p>
-                            <span className="text-base font-bold text-gray-600">{item.stableQuantity || 0}</span>
+                            <span className="text-base font-bold text-gray-600">{formatDisplayQuantity(item.stableQuantity)}</span>
                           </div>
                           <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Alert At</p>
-                            <span className="text-base font-bold text-gray-600">{item.lowStockThreshold || 10}</span>
+                            <span className="text-base font-bold text-gray-600">{formatDisplayQuantity(item.lowStockThreshold ?? 10)}</span>
                           </div>
                         </div>
 
@@ -755,10 +871,10 @@ const ManageInventory = () => {
 
                       <div className="text-right sm:text-right w-full sm:w-auto pl-11 sm:pl-0">
                         <div className={`font-black text-sm ${isPositive ? 'text-green-700' : isZero ? 'text-gray-600' : 'text-red-600'}`}>
-                          {isPositive ? `+${log.quantityChange}` : log.quantityChange}
+                          {isPositive ? `+${formatDisplayQuantity(log.quantityChange)}` : formatDisplayQuantity(log.quantityChange)}
                         </div>
                         <div className="text-[11px] text-gray-500 font-medium">
-                          Remaining: <span className="text-dark font-bold">{log.remainingQuantity}</span>
+                          Remaining: <span className="text-dark font-bold">{formatDisplayQuantity(log.remainingQuantity)}</span>
                         </div>
                       </div>
                     </div>
@@ -783,7 +899,7 @@ const ManageInventory = () => {
                        adjustType === 'stock-out' ? 'Stock Out (Deduct)' :
                        'Manual Stock Count'}
                     </h3>
-                    <p className="text-xs text-gray-500 font-medium">{adjustingItem.name} (Current: {adjustingItem.quantity} {adjustingItem.unit})</p>
+                    <p className="text-xs text-gray-500 font-medium">{adjustingItem.name} (Current: {formatDisplayQuantity(adjustingItem.quantity)} {adjustingItem.unit})</p>
                   </div>
                   <button onClick={() => setAdjustingItem(null)} className="text-gray-400 hover:text-dark">
                     <X size={18} />
@@ -797,9 +913,11 @@ const ManageInventory = () => {
                     </label>
                     <input 
                       type="number" 
-                      min={adjustType === 'manual-adjustment' ? '0' : '1'}
+                      step="any"
+                      min={adjustType === 'manual-adjustment' ? '0' : '0.0001'}
                       value={adjustAmount}
-                      onChange={(e) => setAdjustAmount(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setAdjustAmount(e.target.value)}
+                      onBlur={() => setAdjustAmount(prev => formatDisplayQuantity(prev))}
                       className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-sm font-bold text-dark"
                     />
                   </div>

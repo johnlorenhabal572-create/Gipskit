@@ -3,6 +3,7 @@ import { fetchOrders, removeOrder } from '../api/orderService';
 import { AnimatePresence } from 'motion/react';
 import { X, Receipt as ReceiptIcon, Search } from 'lucide-react';
 import { formatPrice } from '../utils/format';
+import { calculateTotalOrderQuantity, getAggregatedOrderItems, formatQuantityValue } from '../utils/orderItemUtils';
 
 const TransactionHistory = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
@@ -139,7 +140,7 @@ const TransactionHistory = () => {
                   )}
                   <div className="flex flex-col sm:items-end">
                     <p className="text-base font-black text-dark">{formatPrice(order.total)}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{order.items.length} Item(s) • {order.paymentMethod}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{calculateTotalOrderQuantity(order.items || [])} Item(s) • {order.paymentMethod}</p>
                   </div>
                 </div>
               </div>
@@ -173,18 +174,18 @@ const TransactionHistory = () => {
                 
                 <div className="p-5 max-h-[60vh] overflow-y-auto space-y-4">
                   <div className="divide-y divide-gray-100">
-                    {selectedOrder.items.map((item: any, idx: number) => (
+                    {getAggregatedOrderItems(selectedOrder.items || []).map((item: any, idx: number) => (
                       <div key={idx} className="py-2.5 flex gap-3 items-center">
                         <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden shrink-0">
                           <img 
                             src={item.image || 'https://picsum.photos/seed/food/200/200'} 
                             alt={item.name} 
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover" 
                           />
                         </div>
                         <div className="flex-1">
                           <h4 className="font-bold text-dark text-xs">{item.name}</h4>
-                          <p className="text-[11px] text-gray-500">{formatPrice(item.price)} x {item.quantity}</p>
+                          <p className="text-[11px] text-gray-500">{formatPrice(item.price)} × {formatQuantityValue(item.quantity)}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-dark text-xs">{formatPrice(item.price * item.quantity)}</p>

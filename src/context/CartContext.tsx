@@ -40,6 +40,36 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     showNotification(`${product.name} added to cart!`);
   }, [showNotification]);
 
+  const updateQuantity = useCallback((productId: string | number, delta: number) => {
+    setCart((prevCart: any[]) => {
+      const item = prevCart.find((i) => i.id === productId);
+      if (!item) return prevCart;
+
+      if (delta < 0) {
+        if (item.quantity <= 1) {
+          return prevCart;
+        }
+        const newQty = Math.max(1, item.quantity + delta);
+        return prevCart.map((i) =>
+          i.id === productId ? { ...i, quantity: newQty } : i
+        );
+      }
+
+      if (delta > 0) {
+        const newQty = item.quantity + delta;
+        if (newQty > item.stock) {
+          showNotification(`Maximum available quantity reached (${item.stock}).`);
+          return prevCart;
+        }
+        return prevCart.map((i) =>
+          i.id === productId ? { ...i, quantity: newQty } : i
+        );
+      }
+
+      return prevCart;
+    });
+  }, [showNotification]);
+
   const removeFromCart = useCallback((productId: string | number) => {
     setCart((prevCart: any[]) => prevCart.filter((item) => item.id !== productId));
   }, []);
@@ -53,12 +83,13 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const value = useMemo(() => ({ 
     cart, 
     addToCart, 
+    updateQuantity,
     removeFromCart, 
     getCartTotal, 
     clearCart, 
     notification, 
     showNotification 
-  }), [cart, addToCart, removeFromCart, getCartTotal, clearCart, notification, showNotification]);
+  }), [cart, addToCart, updateQuantity, removeFromCart, getCartTotal, clearCart, notification, showNotification]);
 
   return (
     <CartContext.Provider value={value}>

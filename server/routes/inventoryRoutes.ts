@@ -93,47 +93,85 @@ router.get('/turnover', async (req: Request, res: Response) => {
     if (isConnected) {
       const items = await InventoryItem.find().sort({ name: 1 }).lean();
 
-      const results = await Promise.all(items.map(async (item: any) => {
+      // 1. Single batch query for all logs during the period
+      const allPeriodLogs = await InventoryLog.find({
+        date: { $gte: periodStart, $lte: periodEnd }
+      }).sort({ date: 1 }).lean();
+
+      const periodLogsByItem = new Map<string, any[]>();
+      for (const log of allPeriodLogs) {
+        const invId = String(log.inventoryId);
+        if (!periodLogsByItem.has(invId)) {
+          periodLogsByItem.set(invId, []);
+        }
+        periodLogsByItem.get(invId)!.push(log);
+      }
+
+      // 2. Single batch aggregation to retrieve latest prior log before periodStart for each item
+      const priorLogAgg = await InventoryLog.aggregate([
+        { $match: { date: { $lt: periodStart } } },
+        { $sort: { date: -1 } },
+        {
+          $group: {
+            _id: '$inventoryId',
+            remainingQuantity: { $first: '$remainingQuantity' }
+          }
+        }
+      ]);
+      const priorLogMap = new Map<string, number>();
+      for (const p of priorLogAgg) {
+        if (p._id != null) {
+          priorLogMap.set(String(p._id), Number(p.remainingQuantity ?? 0));
+        }
+      }
+
+      // 3. For any items without a prior log before periodStart, fetch earliest log ever in single batch
+      const itemsWithoutPrior = items.filter(item => !priorLogMap.has(String(item.id || item._id)));
+      const earliestLogMap = new Map<string, any>();
+      if (itemsWithoutPrior.length > 0) {
+        const itemIdsWithoutPrior = itemsWithoutPrior.map(i => String(i.id || i._id));
+        const earliestLogAgg = await InventoryLog.aggregate([
+          { $match: { inventoryId: { $in: itemIdsWithoutPrior } } },
+          { $sort: { date: 1 } },
+          {
+            $group: {
+              _id: '$inventoryId',
+              date: { $first: '$date' },
+              createdAt: { $first: '$createdAt' },
+              remainingQuantity: { $first: '$remainingQuantity' },
+              quantityChange: { $first: '$quantityChange' }
+            }
+          }
+        ]);
+        for (const e of earliestLogAgg) {
+          if (e._id != null) {
+            earliestLogMap.set(String(e._id), e);
+          }
+        }
+      }
+
+      const results = items.map((item: any) => {
         const itemId = String(item.id || item._id);
 
         // 1. Beginning Stock: Latest log before periodStart
-        const priorLog = await InventoryLog.findOne({
-          inventoryId: itemId,
-          date: { $lt: periodStart }
-        })
-          .sort({ date: -1 })
-          .lean();
-
         let beginningStock: number;
-        if (priorLog) {
-          beginningStock = Number(priorLog.remainingQuantity ?? 0);
-        } else {
-          const firstLogEver = await InventoryLog.findOne({
-            inventoryId: itemId
-          })
-            .sort({ date: 1 })
-            .lean();
-
-          if (firstLogEver) {
-            const firstLogDate = new Date(firstLogEver.date || (firstLogEver as any).createdAt);
-            if (firstLogDate >= periodStart) {
-              const preBalance = Number(firstLogEver.remainingQuantity ?? 0) - Number(firstLogEver.quantityChange ?? 0);
-              beginningStock = Math.max(0, Number(preBalance.toFixed(4)));
-            } else {
-              beginningStock = Number(firstLogEver.remainingQuantity ?? 0);
-            }
+        if (priorLogMap.has(itemId)) {
+          beginningStock = priorLogMap.get(itemId)!;
+        } else if (earliestLogMap.has(itemId)) {
+          const firstLogEver = earliestLogMap.get(itemId);
+          const firstLogDate = new Date(firstLogEver.date || firstLogEver.createdAt);
+          if (firstLogDate >= periodStart) {
+            const preBalance = Number(firstLogEver.remainingQuantity ?? 0) - Number(firstLogEver.quantityChange ?? 0);
+            beginningStock = Math.max(0, Number(preBalance.toFixed(4)));
           } else {
-            beginningStock = Number(item.quantity ?? 0);
+            beginningStock = Number(firstLogEver.remainingQuantity ?? 0);
           }
+        } else {
+          beginningStock = Number(item.quantity ?? 0);
         }
 
         // 2. Logs during the period
-        const periodLogs = await InventoryLog.find({
-          inventoryId: itemId,
-          date: { $gte: periodStart, $lte: periodEnd }
-        })
-          .sort({ date: 1 })
-          .lean();
+        const periodLogs = periodLogsByItem.get(itemId) || [];
 
         // 3. Used calculation:
         // Sum only type = 'order-deduction' (quantityChange is negative, so Math.abs)
@@ -176,7 +214,7 @@ router.get('/turnover', async (req: Request, res: Response) => {
           averageInventory,
           turnover
         };
-      }));
+      });
 
       return res.json(results);
     } else {

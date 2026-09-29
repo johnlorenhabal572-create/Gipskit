@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { Search, Clock, X, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
+import { calculateTotalOrderQuantity, getAggregatedOrderItems, formatQuantityValue } from '../utils/orderItemUtils';
 
 const CustomerOrderHistory = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
@@ -13,14 +14,29 @@ const CustomerOrderHistory = () => {
   const { user } = useContext(AuthContext) as any;
   const { markCustomerOrdersRead } = useNotifications();
   const hasMarkedReadRef = useRef(false);
+  const isFetchingRef = useRef(false);
 
   const loadOrders = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
-      const allOrders = await fetchOrders();
       const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
+      const userEmail = user?.email?.trim();
+
+      // If the customer has no login email and no local order history, they have no orders
+      if (!userEmail && myOrderIds.length === 0) {
+        setMyOrders([]);
+        return;
+      }
+
+      // Request only this customer's relevant orders from the backend
+      const fetchedOrders = await fetchOrders({
+        email: userEmail || undefined,
+        orderIds: myOrderIds.length > 0 ? myOrderIds : undefined
+      });
       
-      const userOrders = allOrders.filter(order => 
-        (myOrderIds.includes(order.id) || (user?.email && order.userEmail === user.email)) && 
+      const userOrders = (fetchedOrders || []).filter(order => 
+        (myOrderIds.includes(order.id) || (userEmail && (order.userEmail === userEmail || order.customer?.email === userEmail))) && 
         order.status !== 'Pending'
       );
       
@@ -35,14 +51,33 @@ const CustomerOrderHistory = () => {
       }
     } catch (err) {
       console.error('Failed to load customer orders:', err);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     hasMarkedReadRef.current = false;
     loadOrders();
-    const interval = setInterval(loadOrders, 5000);
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        loadOrders();
+      }
+    }, 25000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user]);
 
   const handleDelete = async (orderId: string) => {
@@ -122,7 +157,7 @@ const CustomerOrderHistory = () => {
                     View
                   </button>
                 </div>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{order.items?.length || 0} Item(s)</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{calculateTotalOrderQuantity(order.items || [])} Item(s)</p>
               </div>
             </div>
           ))
@@ -153,7 +188,7 @@ const CustomerOrderHistory = () => {
               
               <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
                 <div className="divide-y divide-gray-100">
-                  {selectedOrder.items.map((item: any, idx: number) => (
+                  {getAggregatedOrderItems(selectedOrder.items || []).map((item: any, idx: number) => (
                     <div key={idx} className="flex gap-3 items-center py-2.5 first:pt-0">
                       <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-100">
                         <img 
@@ -164,7 +199,7 @@ const CustomerOrderHistory = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-dark text-xs truncate">{item.name}</h4>
-                        <p className="text-xs text-gray-500">{formatPrice(item.price)} × {item.quantity}</p>
+                        <p className="text-xs text-gray-500">{formatPrice(item.price)} × {formatQuantityValue(item.quantity)}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-dark text-xs">{formatPrice(item.price * item.quantity)}</p>

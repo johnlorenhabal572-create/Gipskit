@@ -128,6 +128,10 @@ const POS = () => {
   const updateQuantity = (productId: any, delta: number) => {
     setPosCart(posCart.map(item => {
       if (item.id === productId) {
+        if (delta < 0 && item.quantity <= 1) {
+          return item;
+        }
+
         let newQty = item.quantity + delta;
         
         if (delta > 0 && newQty > item.stock) {
@@ -135,14 +139,14 @@ const POS = () => {
           return item;
         }
 
-        if (newQty <= 0) {
-          return null;
+        if (newQty < 1) {
+          return item;
         }
 
         return { ...item, quantity: newQty };
       }
       return item;
-    }).filter(Boolean) as any[]);
+    }));
   };
 
   const subtotal = posCart.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);

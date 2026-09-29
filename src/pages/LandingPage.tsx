@@ -3,6 +3,7 @@ import { Utensils, ArrowRight } from 'lucide-react';
 import { useContext, useEffect } from 'react';
 import { IMAGES } from '../constants/images';
 import { AuthContext } from '../context/AuthContext';
+import CustomerDashboard from '../components/CustomerDashboard';
 
 const LandingPage = () => {
   const { user } = useContext(AuthContext) as any;
@@ -13,6 +14,11 @@ const LandingPage = () => {
       navigate('/dashboard');
     }
   }, [user, navigate]);
+
+  // If logged in as customer, render the Customer Dashboard
+  if (user && user.role === 'customer') {
+    return <CustomerDashboard />;
+  }
 
   return (
     <div className="relative min-h-[calc(100vh-65px)] bg-white flex flex-col justify-center overflow-hidden">

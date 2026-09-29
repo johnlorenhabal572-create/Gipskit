@@ -5,6 +5,7 @@ import { CartContext } from '../context/CartContext';
 import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { formatPrice } from '../utils/format';
+import { getAggregatedOrderItems, formatQuantityValue } from '../utils/orderItemUtils';
 
 const MyBill = () => {
   const location = useLocation();
@@ -145,19 +146,28 @@ const MyBill = () => {
         </div>
       ) : (
         <div className="grid gap-6">
-          {bills.map(bill => (
-            <div key={bill.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="bg-dark p-5 sm:p-6 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Order Transaction ID</p>
-                  <h3 className="text-xl font-bold font-mono tracking-tight">{bill.id}</h3>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {bill.items.slice(0, 3).map((item: any, i: number) => (
-                      <span key={i} className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200 border border-white/10">{item.name}</span>
-                    ))}
-                    {bill.items.length > 3 && <span className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200">+{bill.items.length - 3} more</span>}
+          {bills.map(bill => {
+            const aggregatedItems = getAggregatedOrderItems(bill.items || []);
+            const remainingCount = aggregatedItems.length - 3;
+            return (
+              <div key={bill.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="bg-dark p-5 sm:p-6 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Order Transaction ID</p>
+                    <h3 className="text-xl font-bold font-mono tracking-tight">{bill.id}</h3>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {aggregatedItems.slice(0, 3).map((item, i) => (
+                        <span key={i} className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200 border border-white/10">
+                          {item.name} ×{formatQuantityValue(item.quantity)}
+                        </span>
+                      ))}
+                      {remainingCount > 0 && (
+                        <span className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-gray-200">
+                          +{remainingCount} more
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
                 <div className="sm:text-right">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total Due</p>
                   <h3 className="text-3xl font-black text-primary tracking-tight">{formatPrice(bill.total)}</h3>
@@ -297,7 +307,8 @@ const MyBill = () => {
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       )}
     </div>

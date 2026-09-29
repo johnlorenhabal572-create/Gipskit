@@ -30,7 +30,7 @@ const LoginPage = () => {
   const [showSignInPassword, setShowSignInPassword] = useState(false);
 
   // Forgot Password Multi-Step State
-  // Step 1 = Enter Gmail
+  // Step 1 = Enter Email
   // Step 2 = Enter 6-digit Verification Code
   // Step 3 = Create New Password (8 chars, 1 uppercase, 1 number)
   // Step 4 = Success Confirmation View
@@ -43,7 +43,7 @@ const LoginPage = () => {
   const forgotOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Sign Up Multi-step State
-  // Step 1 = Enter Full Name & Gmail + Privacy Policy Check
+  // Step 1 = Enter Full Name & Email + Privacy Policy Check
   // Step 2 = Enter 6-digit Verification Code
   // Step 3 = Create Password (8 chars, 1 uppercase, 1 number)
   const [signUpStep, setSignUpStep] = useState<1 | 2 | 3>(1);
@@ -153,12 +153,12 @@ const LoginPage = () => {
 
     const cleanEmail = forgotEmail.trim().toLowerCase();
     if (!cleanEmail) {
-      setError('Please enter your Gmail address.');
+      setError('Please enter your email address.');
       return;
     }
 
     if (!isGmailValid(cleanEmail)) {
-      setError('Please enter a valid Gmail address ending in @gmail.com');
+      setError('Please enter a valid email address ending in @gmail.com');
       return;
     }
 
@@ -167,7 +167,7 @@ const LoginPage = () => {
       // Step 2: Verify that the account exists
       const check = await checkAccountExists(cleanEmail);
       if (!check.exists) {
-        setError(check.error || 'No account was found with this Gmail address.');
+        setError(check.error || 'No account was found with this email address.');
         setLoading(false);
         return;
       }
@@ -181,7 +181,7 @@ const LoginPage = () => {
         forgotOtpInputRefs.current[0]?.focus();
       }, 100);
     } catch (err: any) {
-      setError(err.message || 'No account was found with this Gmail address.');
+      setError(err.message || 'No account was found with this email address.');
     } finally {
       setLoading(false);
     }
@@ -286,7 +286,7 @@ const LoginPage = () => {
 
     const cleanEmail = signInEmail.trim();
     if (!cleanEmail) {
-      setError('Please enter your Gmail address.');
+      setError('Please enter your email address.');
       return;
     }
 
@@ -307,7 +307,7 @@ const LoginPage = () => {
   };
 
   // -------------------------------------------------------------
-  // SIGN UP - STEP 1: Send Gmail Verification Code
+  // SIGN UP - STEP 1: Send Verification Code
   // -------------------------------------------------------------
   const handleSendVerificationCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -322,12 +322,12 @@ const LoginPage = () => {
 
     const cleanEmail = signUpEmail.trim().toLowerCase();
     if (!cleanEmail) {
-      setError('Please enter your Gmail address.');
+      setError('Please enter your email address.');
       return;
     }
 
     if (!isGmailValid(cleanEmail)) {
-      setError('Please enter a valid Gmail account ending in @gmail.com');
+      setError('Please enter a valid email account ending in @gmail.com');
       return;
     }
 
@@ -524,22 +524,19 @@ const LoginPage = () => {
           {activeTab === 'signin' && (
             <div>
               <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-dark mb-3 border border-gray-200">
-                  <LogIn size={22} />
-                </div>
                 <h2 className="text-2xl font-black text-dark tracking-tight">
                   Welcome Back
                 </h2>
                 <p className="text-gray-500 text-xs mt-1">
-                  Sign in with your registered Gmail address and password
+                  Sign in with your registered email address and password
                 </p>
               </div>
 
               <form onSubmit={handleSignIn} className="space-y-4">
-                {/* Enter Gmail */}
+                {/* Enter Email */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                    Gmail Address
+                    Email Address
                   </label>
                   <div className="relative group">
                     <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
@@ -548,7 +545,7 @@ const LoginPage = () => {
                       id="signin-email-input"
                       value={signInEmail}
                       onChange={(e) => setSignInEmail(e.target.value)}
-                      placeholder="yourname@gmail.com"
+                      placeholder="yourname@example.com"
                       className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                       required
                       autoFocus
@@ -670,13 +667,13 @@ const LoginPage = () => {
               </div>
 
               {/* ------------------------------------------------------------- */}
-              {/* SIGN UP STEP 1: Enter Full Name, Gmail & Privacy Agreement */}
+              {/* SIGN UP STEP 1: Enter Full Name, Email & Privacy Agreement */}
               {/* ------------------------------------------------------------- */}
               {signUpStep === 1 && (
                 <div>
                   <div className="text-center mb-5">
                     <h3 className="text-xl font-black text-dark tracking-tight">Create Account</h3>
-                    <p className="text-gray-500 text-xs mt-0.5">Enter your full name and valid Gmail address</p>
+                    <p className="text-gray-500 text-xs mt-0.5">Enter your full name and valid email address</p>
                   </div>
 
                   <form onSubmit={handleSendVerificationCode} className="space-y-4">
@@ -698,7 +695,7 @@ const LoginPage = () => {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Gmail Address <span className="text-primary">*</span>
+                        Email Address <span className="text-primary">*</span>
                       </label>
                       <div className="relative group">
                         <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
@@ -707,12 +704,12 @@ const LoginPage = () => {
                           id="signup-email-input"
                           value={signUpEmail}
                           onChange={(e) => setSignUpEmail(e.target.value)}
-                          placeholder="yourname@gmail.com"
+                          placeholder="yourname@example.com"
                           className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                         />
                       </div>
-                      <p className="text-[11px] text-gray-500">Must be a valid Gmail account (e.g. name@gmail.com)</p>
+                      <p className="text-[11px] text-gray-500">Must be a valid email address (e.g. name@example.com)</p>
                     </div>
 
                     {/* Privacy Policy Checkbox */}
@@ -816,7 +813,7 @@ const LoginPage = () => {
                         onClick={() => { setSignUpStep(1); setError(''); }}
                         className="text-gray-500 hover:text-dark font-medium underline"
                       >
-                        Change Gmail
+                        Change Email
                       </button>
                       
                       <button
@@ -1005,14 +1002,14 @@ const LoginPage = () => {
                   </div>
 
                   <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-gray-400 px-0.5">
-                    <span className={forgotStep === 1 ? 'text-primary' : ''}>1. Enter Gmail</span>
+                    <span className={forgotStep === 1 ? 'text-primary' : ''}>1. Enter Email</span>
                     <span className={forgotStep === 2 ? 'text-primary' : ''}>2. Verify Code</span>
                     <span className={forgotStep === 3 ? 'text-primary' : ''}>3. New Password</span>
                   </div>
                 </div>
               )}
 
-              {/* STEP 1: Enter Gmail */}
+              {/* STEP 1: Enter Email */}
               {forgotStep === 1 && (
                 <div>
                   <div className="flex flex-col items-center text-center mb-6">
@@ -1023,14 +1020,14 @@ const LoginPage = () => {
                       Forgot Password?
                     </h2>
                     <p className="text-gray-500 text-xs mt-1 max-w-xs">
-                      Enter your registered Gmail address to verify your account and receive a 6-digit recovery code.
+                      Enter your registered email address to verify your account and receive a 6-digit recovery code.
                     </p>
                   </div>
 
                   <form onSubmit={handleSendResetVerificationCode} className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Enter your Gmail
+                        Enter your Email
                       </label>
                       <div className="relative group">
                         <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-dark transition-colors" />
@@ -1039,7 +1036,7 @@ const LoginPage = () => {
                           id="forgot-email-input"
                           value={forgotEmail}
                           onChange={(e) => setForgotEmail(e.target.value)}
-                          placeholder="yourname@gmail.com"
+                          placeholder="yourname@example.com"
                           className="w-full bg-white border border-gray-300 p-2.5 pl-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                           required
                           autoFocus
@@ -1146,7 +1143,7 @@ const LoginPage = () => {
                         onClick={() => { setForgotStep(1); setError(''); }}
                         className="text-gray-400 hover:text-dark text-[11px] underline"
                       >
-                        Change Gmail address
+                        Change email address
                       </button>
                     </div>
                   </div>
@@ -1265,7 +1262,7 @@ const LoginPage = () => {
                     Password Reset Complete!
                   </h3>
                   <p className="text-gray-600 text-sm mb-6 max-w-sm mx-auto leading-relaxed">
-                    Your password has been successfully changed. You can now log in using your existing Gmail and new password.
+                    Your password has been successfully changed. You can now log in using your existing email and new password.
                   </p>
 
                   <button 
@@ -1310,7 +1307,7 @@ const LoginPage = () => {
               <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto text-xs text-gray-600 leading-relaxed">
                 <div>
                   <h4 className="font-bold text-dark text-sm mb-1">1. Information We Collect</h4>
-                  <p>When you create an account or place an order with Gip's Kitchen, we collect your full name, Gmail address, contact number, and order details to prepare and fulfill your takeout/pickup requests.</p>
+                  <p>When you create an account or place an order with Gip's Kitchen, we collect your full name, email address, contact number, and order details to prepare and fulfill your takeout/pickup requests.</p>
                 </div>
                 <div>
                   <h4 className="font-bold text-dark text-sm mb-1">2. How We Use Your Data</h4>

@@ -122,5 +122,11 @@ const OrderSchema: Schema<IOrder> = new Schema(
   }
 );
 
+// Compound indexes justified by actual production query patterns
+OrderSchema.index({ userEmail: 1, createdAt: -1 });
+OrderSchema.index({ 'customer.email': 1, createdAt: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ createdAt: -1 });
+
 export const Order: Model<IOrder> = 
   mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);

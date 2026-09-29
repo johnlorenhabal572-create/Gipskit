@@ -20,7 +20,7 @@ let isConnected = false;
 let connectionPromise: Promise<{ isConnected: boolean; error?: string }> | null = null;
 let lastConnectionAttempt = 0;
 let connectionFailed = false;
-const RETRY_COOLDOWN_MS = 15000; // 15s cooldown after failed attempt
+const RETRY_COOLDOWN_MS = 5000; // 5s cooldown after failed attempt (reduced from 15s for faster recovery)
 
 // Sanitizes MongoDB connection URIs to handle common copy-paste typos
 export function sanitizeMongoUri(rawUri?: string): string | null {
@@ -98,6 +98,32 @@ export async function connectMongoose(): Promise<{ isConnected: boolean; error?:
     return connectionPromise;
   }
 
+  // If Mongoose is already connecting (e.g. driver-level auto-reconnect), wait for completion
+  if (mongoose.connection.readyState === 2) {
+    return new Promise((resolve) => {
+      const onConnected = () => {
+        cleanup();
+        isConnected = true;
+        resolve({ isConnected: true });
+      };
+      const onError = (err: any) => {
+        cleanup();
+        resolve({ isConnected: false, error: err?.message || 'Connection failed' });
+      };
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve({ isConnected: mongoose.connection.readyState === 1 });
+      }, 10000);
+      const cleanup = () => {
+        clearTimeout(timeout);
+        mongoose.connection.removeListener('connected', onConnected);
+        mongoose.connection.removeListener('error', onError);
+      };
+      mongoose.connection.once('connected', onConnected);
+      mongoose.connection.once('error', onError);
+    });
+  }
+
   const sanitizedUri = sanitizeMongoUri(process.env.MONGODB_URI);
 
   if (!sanitizedUri) {
@@ -118,9 +144,11 @@ export async function connectMongoose(): Promise<{ isConnected: boolean; error?:
 
       await mongoose.connect(sanitizedUri, {
         dbName: dbName.includes('?') ? 'ecommerce_db' : dbName,
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
-        socketTimeoutMS: 15000,
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10,
+        minPoolSize: 1,
         family: 4, // IPv4 preference to avoid container IPv6 TLS handshake issues
         tls: sanitizedUri.includes('mongodb+srv://') || sanitizedUri.includes('ssl=true') || sanitizedUri.includes('tls=true'),
         tlsAllowInvalidCertificates: true

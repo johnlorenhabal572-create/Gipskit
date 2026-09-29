@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   fetchNotificationCounts, 
   markCustomerNotificationsRead, 
@@ -32,6 +32,7 @@ const NotificationContext = createContext<NotificationContextType>({
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useContext(AuthContext) as any;
+  const isFetchingRef = useRef(false);
   const [counts, setCounts] = useState<NotificationCounts>({
     customerOrderUpdates: 0,
     adminNewOrders: 0,
@@ -40,20 +41,41 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   });
 
   const refreshNotifications = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const data = await fetchNotificationCounts();
       setCounts(data);
     } catch (err) {
       console.warn('Error refreshing notifications:', err);
+    } finally {
+      isFetchingRef.current = false;
     }
   }, []);
 
-  // Poll notifications automatically every 5 seconds without full page reload
+  // Poll notifications automatically without excessive requests or overlapping
   useEffect(() => {
     refreshNotifications();
-    const interval = setInterval(refreshNotifications, 5000);
-    return () => clearInterval(interval);
-  }, [user, refreshNotifications]);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        refreshNotifications();
+      }
+    }, 25000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshNotifications();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.email, user?.role, refreshNotifications]);
 
   const markCustomerOrdersReadHandler = async (orderIds?: string[]) => {
     // Optimistically update UI

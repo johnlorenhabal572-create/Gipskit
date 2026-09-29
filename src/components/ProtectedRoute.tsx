@@ -1,13 +1,22 @@
-import { useContext } from 'react';
+import { useContext, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { user } = useContext(AuthContext) as any;
+const ProtectedRoute = ({ children, requireAdmin = false }: { children: any; requireAdmin?: boolean }) => {
+  const { user, logout } = useContext(AuthContext) as any;
   const location = useLocation();
 
-  // If nobody is logged in, send them to the login screen
-  if (!user) {
+  const savedExpiry = localStorage.getItem('capstone_session_expiry');
+  const isExpired = user && (!savedExpiry || isNaN(Number(savedExpiry)) || Date.now() >= Number(savedExpiry));
+
+  useEffect(() => {
+    if (isExpired) {
+      logout?.();
+    }
+  }, [isExpired, logout]);
+
+  // If nobody is logged in or session has expired, send them to the login screen
+  if (!user || isExpired) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

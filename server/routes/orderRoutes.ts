@@ -35,10 +35,15 @@ function normalizeOrderEmail(order: any): any {
 }
 
 let hasBackfilledOrders = false;
-async function backfillExistingOrderEmails() {
+export async function backfillExistingOrderEmails() {
   if (hasBackfilledOrders) return;
   hasBackfilledOrders = true;
   try {
+    const { isConnected } = await getDbStatus();
+    if (!isConnected) {
+      hasBackfilledOrders = false;
+      return;
+    }
     const candidates = await Order.find({
       $or: [
         { 'customer.email': '' },
@@ -46,11 +51,19 @@ async function backfillExistingOrderEmails() {
         { 'customer.email': { $exists: false } }
       ],
       userEmail: { $exists: true, $ne: '', $nin: ['anonymous', 'system'] }
-    });
-    for (const ord of candidates) {
-      if (ord.userEmail && ord.userEmail.includes('@')) {
-        ord.customer.email = ord.userEmail.trim();
-        await ord.save();
+    }).select('id userEmail customer').lean();
+
+    if (candidates.length > 0) {
+      const bulkOps = candidates
+        .filter(c => c.userEmail && c.userEmail.includes('@'))
+        .map(c => ({
+          updateOne: {
+            filter: { id: c.id },
+            update: { $set: { 'customer.email': c.userEmail.trim() } }
+          }
+        }));
+      if (bulkOps.length > 0) {
+        await Order.bulkWrite(bulkOps);
       }
     }
   } catch (err) {
@@ -58,36 +71,75 @@ async function backfillExistingOrderEmails() {
   }
 }
 
-// 1. GET /api/orders - Get all orders or filter
+// Maintenance endpoint: trigger order email backfill separately from normal read operations
+router.post('/maintenance/backfill-emails', async (req: Request, res: Response) => {
+  try {
+    hasBackfilledOrders = false;
+    await backfillExistingOrderEmails();
+    return res.json({ success: true, message: 'Order email backfill completed' });
+  } catch (error) {
+    console.error('Error running manual backfill:', error);
+    return res.status(500).json({ error: 'Failed to run order email backfill' });
+  }
+});
+
+// Run maintenance backfill once in background after server warmup (never blocks GET requests)
+setTimeout(() => {
+  backfillExistingOrderEmails().catch(() => {});
+}, 10000);
+
+// 1. GET /api/orders - Get all orders or filter (optimized indexed query, no writes on GET)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
-    const { status, email, orderType, search } = req.query;
+    const { status, email, orderType, search, orderIds, limit } = req.query;
+
+    const emailStr = typeof email === 'string' ? email.trim() : '';
+    const idList = orderIds ? String(orderIds).split(',').map(s => s.trim()).filter(Boolean) : [];
 
     if (isConnected) {
-      backfillExistingOrderEmails().catch(() => {});
       const query: any = {};
       if (status && status !== 'All') {
         query.status = status;
       }
-      if (email) {
-        query.$or = [{ userEmail: email }, { 'customer.email': email }];
+
+      if (emailStr && idList.length > 0) {
+        query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }, { id: { $in: idList } }];
+      } else if (emailStr) {
+        query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }];
+      } else if (idList.length > 0) {
+        query.id = { $in: idList };
       }
+
       if (orderType) {
         query.orderType = orderType;
       }
       if (search && typeof search === 'string') {
         const searchRegex = new RegExp(search.trim(), 'i');
-        query.$or = [
+        const searchConditions = [
           { id: searchRegex },
           { 'customer.name': searchRegex },
           { 'customer.email': searchRegex },
           { userEmail: searchRegex },
           { 'customer.phone': searchRegex }
         ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: searchConditions }];
+          delete query.$or;
+        } else {
+          query.$or = searchConditions;
+        }
       }
 
-      const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
+      let orderQuery = Order.find(query).sort({ createdAt: -1 });
+      if (limit) {
+        const parsedLimit = Math.max(1, Number(limit));
+        if (!isNaN(parsedLimit)) {
+          orderQuery = orderQuery.limit(parsedLimit);
+        }
+      }
+
+      const orders = await orderQuery.lean();
       return res.json(orders.map(normalizeOrderEmail));
     }
 
@@ -96,8 +148,12 @@ router.get('/', async (req: Request, res: Response) => {
     if (status && status !== 'All') {
       list = list.filter(o => o.status === status);
     }
-    if (email) {
-      list = list.filter(o => o.userEmail === email || o.customer?.email === email);
+    if (emailStr && idList.length > 0) {
+      list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr || idList.includes(o.id));
+    } else if (emailStr) {
+      list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr);
+    } else if (idList.length > 0) {
+      list = list.filter(o => idList.includes(o.id));
     }
     if (orderType) {
       list = list.filter(o => o.orderType === orderType);
@@ -114,6 +170,12 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     list.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+    if (limit) {
+      const parsedLimit = Math.max(1, Number(limit));
+      if (!isNaN(parsedLimit)) {
+        list = list.slice(0, parsedLimit);
+      }
+    }
     return res.json(list.map(normalizeOrderEmail));
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -121,22 +183,92 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2. GET /api/orders/stats/summary - Comprehensive sales statistics
+// 2. GET /api/orders/stats/summary - Comprehensive sales statistics (optimized with database filtering and aggregation)
 router.get('/stats/summary', async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
     const { period, date } = req.query; // period: 'day' | 'week' | 'month' | 'year' | 'all'
-
-    let orders: any[] = [];
-    if (isConnected) {
-      orders = await Order.find({ status: 'Completed' }).lean();
-    } else {
-      orders = memoryStore.orders.filter(o => o.status === 'Completed');
-    }
-
     const targetDate = date ? new Date(date as string) : new Date();
 
-    // Filter by period
+    if (isConnected) {
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+
+      if (period === 'day') {
+        startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0);
+        endDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+      } else if (period === 'week') {
+        startDate = new Date(targetDate);
+        startDate.setDate(targetDate.getDate() - targetDate.getDay());
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 7);
+      } else if (period === 'month') {
+        startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1, 0, 0, 0, 0);
+        endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1, 0, 0, 0, 0);
+      } else if (period === 'year') {
+        startDate = new Date(targetDate.getFullYear(), 0, 1, 0, 0, 0, 0);
+        endDate = new Date(targetDate.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+      }
+
+      const matchStage: any = { status: 'Completed' };
+      if (startDate && endDate) {
+        matchStage.$or = [
+          { date: { $gte: startDate, $lt: endDate } },
+          { date: { $exists: false }, createdAt: { $gte: startDate, $lt: endDate } }
+        ];
+      }
+
+      const [aggResult, filteredOrders] = await Promise.all([
+        Order.aggregate([
+          { $match: matchStage },
+          {
+            $facet: {
+              totals: [
+                {
+                  $group: {
+                    _id: null,
+                    totalRevenue: { $sum: { $ifNull: ['$total', 0] } },
+                    transactionCount: { $sum: 1 }
+                  }
+                }
+              ],
+              paymentMethods: [
+                {
+                  $group: {
+                    _id: { $ifNull: ['$paymentMethod', 'Cash'] },
+                    amount: { $sum: { $ifNull: ['$total', 0] } }
+                  }
+                }
+              ]
+            }
+          }
+        ]),
+        Order.find(matchStage).sort({ createdAt: -1 }).lean()
+      ]);
+
+      const stats = aggResult?.[0];
+      const totalRevenue = stats?.totals?.[0]?.totalRevenue || 0;
+      const transactionCount = stats?.totals?.[0]?.transactionCount || 0;
+      const averageOrderValue = transactionCount > 0 ? Math.round(totalRevenue / transactionCount) : 0;
+
+      const paymentMethods: { [key: string]: number } = {};
+      (stats?.paymentMethods || []).forEach((pm: any) => {
+        paymentMethods[pm._id || 'Cash'] = pm.amount || 0;
+      });
+
+      return res.json({
+        period: period || 'all',
+        totalRevenue,
+        transactionCount,
+        averageOrderValue,
+        paymentMethods,
+        orders: filteredOrders.map(normalizeOrderEmail)
+      });
+    }
+
+    // In-memory fallback
+    const orders = memoryStore.orders.filter(o => o.status === 'Completed');
     const filtered = orders.filter(o => {
       const orderDate = new Date(o.date || o.createdAt);
       if (period === 'day') {
@@ -179,7 +311,7 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
       transactionCount,
       averageOrderValue,
       paymentMethods,
-      orders: filtered
+      orders: filtered.map(normalizeOrderEmail)
     });
   } catch (error) {
     console.error('Error calculating sales summary:', error);
@@ -187,19 +319,62 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
   }
 });
 
-// 3. GET /api/orders/stats/product-analysis - Best & least selling items
+// 3. GET /api/orders/stats/product-analysis - Best & least selling items (optimized with MongoDB aggregation)
 router.get('/stats/product-analysis', async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
-    const { period } = req.query;
 
-    let orders: any[] = [];
     if (isConnected) {
-      orders = await Order.find({ status: 'Completed' }).lean();
-    } else {
-      orders = memoryStore.orders.filter(o => o.status === 'Completed');
+      const aggregatedProducts = await Order.aggregate([
+        { $match: { status: 'Completed' } },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: { $ifNull: ['$items.name', 'Unknown Item'] },
+            name: { $first: { $ifNull: ['$items.name', 'Unknown Item'] } },
+            quantity: { $sum: { $ifNull: ['$items.quantity', 0] } },
+            revenue: {
+              $sum: {
+                $multiply: [
+                  { $ifNull: ['$items.price', 0] },
+                  { $ifNull: ['$items.quantity', 0] }
+                ]
+              }
+            },
+            category: { $first: { $ifNull: ['$items.category', ''] } }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            name: 1,
+            quantity: 1,
+            revenue: 1,
+            category: 1
+          }
+        }
+      ]);
+
+      const productList = aggregatedProducts.map(p => ({
+        name: p.name || 'Unknown Item',
+        quantity: Number(p.quantity) || 0,
+        revenue: Number(p.revenue) || 0,
+        category: p.category || ''
+      }));
+
+      const bestSelling = [...productList].sort((a, b) => b.quantity - a.quantity);
+      const leastSelling = [...productList].sort((a, b) => a.quantity - b.quantity);
+
+      return res.json({
+        allProducts: productList,
+        bestSelling: bestSelling.slice(0, 10),
+        leastSelling: leastSelling.slice(0, 10),
+        totalProductsTracked: productList.length
+      });
     }
 
+    // In-memory fallback
+    const orders = memoryStore.orders.filter(o => o.status === 'Completed');
     const productMap: { [name: string]: { name: string; quantity: number; revenue: number; category?: string } } = {};
 
     orders.forEach(order => {

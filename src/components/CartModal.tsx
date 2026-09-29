@@ -2,12 +2,12 @@ import { useContext } from 'react';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { X, Trash2, ShoppingBag } from 'lucide-react';
+import { X, Trash2, ShoppingBag, Minus, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
 
 const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const { cart, getCartTotal, removeFromCart } = useContext(CartContext) as any; 
+  const { cart, getCartTotal, removeFromCart, updateQuantity } = useContext(CartContext) as any; 
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
 
@@ -91,8 +91,24 @@ const CartModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-dark text-xs leading-tight truncate mb-1">{item.name}</p>
-                      <p className="text-xs text-gray-500 font-medium">Qty: {item.quantity}</p>
+                      <p className="font-bold text-dark text-xs leading-tight truncate mb-1.5">{item.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => updateQuantity(item.id, -1)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white border border-gray-300 text-gray-600 hover:text-dark hover:border-dark transition-colors"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus size={11} />
+                        </button>
+                        <span className="text-xs font-bold w-4 text-center text-dark">{item.quantity}</span>
+                        <button 
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white border border-gray-300 text-gray-600 hover:text-dark hover:border-dark transition-colors"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="text-right shrink-0">

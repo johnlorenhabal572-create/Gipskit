@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchOrders } from '../api/orderService';
 import { fetchInventory } from '../api/inventoryService';
 import { formatPrice } from '../utils/format';
@@ -18,8 +18,11 @@ const Dashboard = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const isFetchingRef = useRef(false);
 
   const loadData = async (isBackground = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     if (!isBackground) {
       setIsLoading(true);
     }
@@ -36,15 +39,30 @@ const Dashboard = () => {
       if (!isBackground) {
         setIsLoading(false);
       }
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
-      loadData(true);
-    }, 5000);
-    return () => clearInterval(interval);
+      if (document.visibilityState !== 'hidden') {
+        loadData(true);
+      }
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const today = new Date().toDateString();

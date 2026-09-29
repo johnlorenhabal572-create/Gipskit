@@ -1,11 +1,30 @@
 import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 
+export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+
 export const AuthContext = createContext<any>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('capstone_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    const savedExpiry = localStorage.getItem('capstone_session_expiry');
+
+    if (savedUser && savedExpiry) {
+      const expiryTime = Number(savedExpiry);
+      if (!isNaN(expiryTime) && Date.now() < expiryTime) {
+        try {
+          return JSON.parse(savedUser);
+        } catch {
+          localStorage.removeItem('capstone_user');
+          localStorage.removeItem('capstone_session_expiry');
+          return null;
+        }
+      }
+    }
+
+    localStorage.removeItem('capstone_user');
+    localStorage.removeItem('capstone_session_expiry');
+    return null;
   });
 
   const [accounts, setAccounts] = useState<any[]>(() => {
@@ -75,12 +94,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.setItem('capstone_user', JSON.stringify(user));
     } else {
       localStorage.removeItem('capstone_user');
+      localStorage.removeItem('capstone_session_expiry');
     }
   }, [user]);
 
   useEffect(() => {
     localStorage.setItem('capstone_accounts', JSON.stringify(accounts));
   }, [accounts]);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('capstone_user');
+    localStorage.removeItem('capstone_session_expiry');
+    setUser(null);
+  }, []);
+
+  // Periodic & event-based check for 24-hour session expiration
+  useEffect(() => {
+    if (!user) return;
+
+    const checkExpiration = () => {
+      const savedExpiry = localStorage.getItem('capstone_session_expiry');
+      if (!savedExpiry || isNaN(Number(savedExpiry)) || Date.now() >= Number(savedExpiry)) {
+        logout();
+      }
+    };
+
+    checkExpiration();
+
+    const interval = setInterval(checkExpiration, 60 * 1000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkExpiration();
+      }
+    };
+
+    window.addEventListener('focus', checkExpiration);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkExpiration);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, logout]);
 
   // Request 6-digit verification code to Gmail
   const sendSignUpCode = useCallback(async (email: string) => {
@@ -91,7 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       (a: any) => a.email && a.email.toLowerCase() === cleanEmail
     );
     if (existingLocal) {
-      throw new Error('An account with this Gmail address already exists. Please Sign In instead.');
+      throw new Error('An account with this email address already exists. Please Sign In instead.');
     }
 
     try {
@@ -110,7 +167,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [accounts]);
 
-  // Check whether an account exists with the given Gmail (for Forgot Password)
+  // Check whether an account exists with the given email (for Forgot Password)
   const checkAccountExists = useCallback(async (email: string): Promise<{ exists: boolean; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
     try {
@@ -127,7 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (localFound) {
           return { exists: true };
         }
-        return { exists: false, error: data.error || 'No account was found with this Gmail address.' };
+        return { exists: false, error: data.error || 'No account was found with this email address.' };
       }
       return { exists: true };
     } catch {
@@ -137,7 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (localFound) {
         return { exists: true };
       }
-      return { exists: false, error: 'No account was found with this Gmail address.' };
+      return { exists: false, error: 'No account was found with this email address.' };
     }
   }, [accounts]);
 
@@ -148,7 +205,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Verify account exists before requesting code
     const accountCheck = await checkAccountExists(cleanEmail);
     if (!accountCheck.exists) {
-      throw new Error(accountCheck.error || 'No account was found with this Gmail address.');
+      throw new Error(accountCheck.error || 'No account was found with this email address.');
     }
 
     try {
@@ -249,7 +306,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       (a: any) => a.email && a.email.toLowerCase() === cleanEmail
     );
     if (existingLocal) {
-      throw new Error('An account with this Gmail address already exists. Please Sign In.');
+      throw new Error('An account with this email address already exists. Please Sign In.');
     }
 
     try {
@@ -268,6 +325,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.success && data.user) {
+        const expiry = Date.now() + SESSION_DURATION_MS;
+        localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);
         // Sync with local account state
         setAccounts(prev => {
@@ -308,6 +367,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         );
         if (localFound) {
           const { password: _, ...cleanUser } = localFound;
+          const expiry = Date.now() + SESSION_DURATION_MS;
+          localStorage.setItem('capstone_session_expiry', expiry.toString());
           setUser(cleanUser);
           return cleanUser;
         }
@@ -315,6 +376,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.success && data.user) {
+        const expiry = Date.now() + SESSION_DURATION_MS;
+        localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);
         return data.user;
       }
@@ -326,16 +389,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       );
       if (localFound) {
         const { password: _, ...cleanUser } = localFound;
+        const expiry = Date.now() + SESSION_DURATION_MS;
+        localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(cleanUser);
         return cleanUser;
       }
-      throw new Error(err.message || 'Invalid Gmail address or password');
+      throw new Error(err.message || 'Invalid email address or password');
     }
   }, [accounts]);
-
-  const logout = useCallback(() => {
-    setUser(null);
-  }, []);
 
   const addAccount = useCallback(async (newAcc: any) => {
     try {
