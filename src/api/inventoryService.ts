@@ -1,20 +1,26 @@
 // Authorization headers helper from current user session
 export const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  const token = localStorage.getItem('capstone_auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const savedUser = localStorage.getItem('capstone_user');
     if (savedUser) {
       const parsed = JSON.parse(savedUser);
-      return {
-        'Content-Type': 'application/json',
-        'x-user-role': parsed.role || 'customer',
-        'x-user-email': parsed.email || '',
-        'x-user-name': parsed.name || ''
-      };
+      headers['x-user-role'] = parsed.role || 'customer';
+      headers['x-user-email'] = parsed.email || '';
+      headers['x-user-name'] = parsed.name || '';
     }
   } catch (err) {
     console.error('Error reading auth headers in inventoryService:', err);
   }
-  return { 'Content-Type': 'application/json' };
+  return headers;
 };
 
 // In-memory runtime cache (no localStorage dependency for permanent storage)

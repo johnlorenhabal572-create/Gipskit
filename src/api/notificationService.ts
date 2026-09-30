@@ -17,14 +17,7 @@ export interface NotificationCounts {
 // 1. Fetch current notification counts for user and admin
 export async function fetchNotificationCounts(): Promise<NotificationCounts> {
   try {
-    const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
-    const params = new URLSearchParams();
-    if (myOrderIds.length > 0) {
-      params.append('myOrderIds', myOrderIds.join(','));
-    }
-
-    const queryString = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`/api/notifications/counts${queryString}`, {
+    const res = await fetch('/api/notifications/counts', {
       headers: getAuthHeaders()
     });
 
@@ -53,11 +46,11 @@ export async function fetchNotificationCounts(): Promise<NotificationCounts> {
 // 2. Mark customer order notifications as read
 export async function markCustomerNotificationsRead(orderIds?: string[]): Promise<boolean> {
   try {
-    const myOrderIds = orderIds || JSON.parse(localStorage.getItem('my_order_ids') || '[]');
+    const targetOrderIds = orderIds || [];
     const res = await fetch('/api/notifications/customer/mark-read', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ orderIds: myOrderIds })
+      body: JSON.stringify({ orderIds: targetOrderIds })
     });
 
     return res.ok;

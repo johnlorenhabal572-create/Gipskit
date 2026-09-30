@@ -1,22 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { Order, InventoryItem } from '../models';
 import { getDbStatus, memoryStore } from '../db';
+import { authenticateToken, requireAdminOrStaff } from '../auth';
 
 const router = Router();
 
-// Helper to get performer details
-function getRequesterInfo(req: Request) {
-  const role = (req.headers['x-user-role'] as string) || 'customer';
-  const email = (req.headers['x-user-email'] as string) || '';
-  return { role, email };
-}
-
-// 1. GET /api/notifications/counts - Get active unread counts for customer and admin
-router.get('/counts', async (req: Request, res: Response) => {
+// 1. GET /api/notifications/counts - Get active unread counts for customer and admin (authenticated)
+router.get('/counts', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { role, email } = getRequesterInfo(req);
-    const myOrderIdsRaw = (req.query.myOrderIds as string) || '';
-    const myOrderIds = myOrderIdsRaw ? myOrderIdsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const currentUser = req.user!;
+    const role = currentUser.role;
+    const email = (currentUser.email || '').toLowerCase();
 
     const { isConnected } = await getDbStatus();
 
@@ -26,19 +20,10 @@ router.get('/counts', async (req: Request, res: Response) => {
     let lowStockItems: any[] = [];
 
     if (isConnected) {
-      // Customer Notifications: Find orders belonging to this user
-      if (email || myOrderIds.length > 0) {
-        const queryConds: any[] = [];
-        if (email) {
-          queryConds.push({ userEmail: email });
-          queryConds.push({ 'customer.email': email });
-        }
-        if (myOrderIds.length > 0) {
-          queryConds.push({ id: { $in: myOrderIds } });
-        }
-
+      // Customer Notifications: Find orders belonging exclusively to this authenticated customer
+      if (email) {
         const customerOrders = await Order.find({
-          $or: queryConds,
+          $or: [{ userEmail: email }, { 'customer.email': email }],
           status: { $ne: 'Pending' }
         }).select('id status customerViewedStatus updatedAt');
 
@@ -50,7 +35,7 @@ router.get('/counts', async (req: Request, res: Response) => {
         }
       }
 
-      // Admin Notifications: Only computed if role is admin or staff
+      // Admin Notifications: Only computed if verified role is admin or staff
       if (role === 'admin' || role === 'staff') {
         adminNewOrders = await Order.countDocuments({
           adminViewed: { $ne: true }
@@ -76,11 +61,10 @@ router.get('/counts', async (req: Request, res: Response) => {
       }
     } else {
       // Memory Store fallback
-      if (email || myOrderIds.length > 0) {
+      if (email) {
         const customerOrders = memoryStore.orders.filter(order => {
-          const matchesEmail = email && (order.userEmail === email || order.customer?.email === email);
-          const matchesId = myOrderIds.includes(order.id);
-          return (matchesEmail || matchesId) && order.status !== 'Pending';
+          const matchesEmail = (order.userEmail || '').toLowerCase() === email || (order.customer?.email || '').toLowerCase() === email;
+          return matchesEmail && order.status !== 'Pending';
         });
 
         for (const order of customerOrders) {
@@ -124,41 +108,37 @@ router.get('/counts', async (req: Request, res: Response) => {
   }
 });
 
-// 2. POST /api/notifications/customer/mark-read - Mark customer order updates as viewed
-router.post('/customer/mark-read', async (req: Request, res: Response) => {
+// 2. POST /api/notifications/customer/mark-read - Mark customer order updates as viewed (strictly own orders)
+router.post('/customer/mark-read', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { email } = getRequesterInfo(req);
-    const { orderIds, email: bodyEmail } = req.body;
-    const targetEmail = bodyEmail || email;
+    const userEmail = (req.user!.email || '').toLowerCase();
+    const { orderIds } = req.body;
     const ids: string[] = Array.isArray(orderIds) ? orderIds : [];
+
+    if (ids.length === 0) {
+      return res.json({ success: true, message: 'No orders specified' });
+    }
 
     const { isConnected } = await getDbStatus();
 
     if (isConnected) {
-      const queryConds: any[] = [];
-      if (targetEmail) {
-        queryConds.push({ userEmail: targetEmail });
-        queryConds.push({ 'customer.email': targetEmail });
-      }
-      if (ids.length > 0) {
-        queryConds.push({ id: { $in: ids } });
-      }
-
-      if (queryConds.length > 0) {
-        const orders = await Order.find({ $or: queryConds });
-        const now = new Date();
-        for (const order of orders) {
-          order.customerViewedStatus = order.status;
-          order.customerLastViewedAt = now;
-          await order.save();
-        }
+      // Security: Only mark read orders that belong to the authenticated customer
+      const orders = await Order.find({
+        id: { $in: ids },
+        $or: [{ userEmail }, { 'customer.email': userEmail }]
+      });
+      const now = new Date();
+      for (const order of orders) {
+        order.customerViewedStatus = order.status;
+        order.customerLastViewedAt = now;
+        await order.save();
       }
     } else {
       const now = new Date();
       for (const order of memoryStore.orders) {
-        const matchesEmail = targetEmail && (order.userEmail === targetEmail || order.customer?.email === targetEmail);
+        const matchesEmail = (order.userEmail || '').toLowerCase() === userEmail || (order.customer?.email || '').toLowerCase() === userEmail;
         const matchesId = ids.includes(order.id);
-        if (matchesEmail || matchesId) {
+        if (matchesEmail && matchesId) {
           order.customerViewedStatus = order.status;
           order.customerLastViewedAt = now;
         }
@@ -172,8 +152,8 @@ router.post('/customer/mark-read', async (req: Request, res: Response) => {
   }
 });
 
-// 3. POST /api/notifications/admin/mark-orders-read - Mark admin new orders as viewed
-router.post('/admin/mark-orders-read', async (req: Request, res: Response) => {
+// 3. POST /api/notifications/admin/mark-orders-read - Mark admin new orders as viewed (Admin/Staff only)
+router.post('/admin/mark-orders-read', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { orderIds } = req.body;
     const ids: string[] = Array.isArray(orderIds) ? orderIds : [];
@@ -202,8 +182,8 @@ router.post('/admin/mark-orders-read', async (req: Request, res: Response) => {
   }
 });
 
-// 4. POST /api/notifications/admin/acknowledge-inventory - Acknowledge low stock items
-router.post('/admin/acknowledge-inventory', async (req: Request, res: Response) => {
+// 4. POST /api/notifications/admin/acknowledge-inventory - Acknowledge low stock items (Admin/Staff only)
+router.post('/admin/acknowledge-inventory', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { itemIds } = req.body;
     const ids: string[] = Array.isArray(itemIds) ? itemIds : [];

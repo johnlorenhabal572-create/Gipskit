@@ -56,13 +56,6 @@ const Checkout = () => {
       };
 
       const savedOrder = await createOrder(orderDetails); 
-      
-      // Save order ID to local storage for history tracking
-      const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
-      if (savedOrder?.id) {
-        myOrderIds.push(savedOrder.id);
-        localStorage.setItem('my_order_ids', JSON.stringify(myOrderIds));
-      }
 
       clearCart(); 
       setFormData({ 

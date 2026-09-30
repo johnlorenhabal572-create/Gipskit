@@ -1,8 +1,13 @@
 // Helper to get active user headers
-function getAuthHeaders(): HeadersInit {
+export function getAuthHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   };
+
+  const token = localStorage.getItem('capstone_auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   try {
     const userStr = localStorage.getItem('capstone_user') || localStorage.getItem('gips_user') || localStorage.getItem('currentUser') || localStorage.getItem('user');
@@ -18,12 +23,36 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
-// In-memory cache for ultra-fast local UI updates and synchronous fallbacks
+// In-memory cache strictly isolated per user session to prevent cross-account leaks
 let ordersCache: any[] = [];
+let cacheOwnerEmail: string | null = null;
 let isCacheLoaded = false;
+
+export function clearOrdersCache() {
+  ordersCache = [];
+  cacheOwnerEmail = null;
+  isCacheLoaded = false;
+}
 
 // 1. Fetch orders from MongoDB backend
 export async function fetchOrders(filters?: { status?: string; email?: string; orderType?: string; search?: string; orderIds?: string[] }): Promise<any[]> {
+  // Determine current active user email
+  let currentEmail = '';
+  try {
+    const userStr = localStorage.getItem('capstone_user');
+    if (userStr) {
+      currentEmail = JSON.parse(userStr)?.email?.toLowerCase() || '';
+    }
+  } catch {
+    // Ignore JSON error
+  }
+
+  // If user changed, purge stale cache immediately
+  if (cacheOwnerEmail !== currentEmail) {
+    clearOrdersCache();
+    cacheOwnerEmail = currentEmail;
+  }
+
   try {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
@@ -46,22 +75,19 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
     const data = await res.json();
     const result = Array.isArray(data) ? data : [];
 
-    // Only update global full cache if fetching without customer-specific subsets
-    const hasSpecificFilter = Boolean(filters?.email || (filters?.orderIds && filters.orderIds.length > 0));
-    if (!hasSpecificFilter) {
-      ordersCache = result;
-      isCacheLoaded = true;
-    }
+    // Cache results scoped to current authenticated user
+    ordersCache = result;
+    cacheOwnerEmail = currentEmail;
+    isCacheLoaded = true;
+
     return result;
   } catch (error) {
     console.warn('Backend orders fetch failed, using cached state:', error);
-    if (filters?.email || (filters?.orderIds && filters.orderIds.length > 0)) {
-      const targetEmail = filters.email?.toLowerCase();
-      const targetIds = filters.orderIds || [];
-      return ordersCache.filter(o => 
-        (targetEmail && (o.userEmail?.toLowerCase() === targetEmail || o.customer?.email?.toLowerCase() === targetEmail)) ||
-        (targetIds.includes(o.id))
-      );
+    if (cacheOwnerEmail !== currentEmail) {
+      return [];
+    }
+    if (filters?.status) {
+      return ordersCache.filter(o => o.status === filters.status);
     }
     return ordersCache;
   }

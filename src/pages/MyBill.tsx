@@ -25,14 +25,14 @@ const MyBill = () => {
 
   const loadBills = async () => {
     try {
-      const allOrders = await fetchOrders();
-      const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
+      if (!user?.email) {
+        setBills([]);
+        return;
+      }
+      const allOrders = await fetchOrders({ status: 'Pending' });
       
       // Filter orders that are 'Pending' and belong to this customer
-      const activeBills = allOrders.filter(order => 
-        (myOrderIds.includes(order.id) || (user?.email && order.userEmail === user.email)) && 
-        order.status === 'Pending'
-      );
+      const activeBills = allOrders.filter(order => order.status === 'Pending');
       
       setBills(activeBills);
     } catch (err) {

@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { clearOrdersCache } from '../api/orderService';
 
 export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -95,6 +96,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } else {
       localStorage.removeItem('capstone_user');
       localStorage.removeItem('capstone_session_expiry');
+      localStorage.removeItem('capstone_auth_token');
+      localStorage.removeItem('my_order_ids');
+      clearOrdersCache();
     }
   }, [user]);
 
@@ -105,6 +109,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = useCallback(() => {
     localStorage.removeItem('capstone_user');
     localStorage.removeItem('capstone_session_expiry');
+    localStorage.removeItem('capstone_auth_token');
+    localStorage.removeItem('my_order_ids');
+    clearOrdersCache();
     setUser(null);
   }, []);
 
@@ -325,6 +332,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.success && data.user) {
+        if (data.token) {
+          localStorage.setItem('capstone_auth_token', data.token);
+        }
         const expiry = Date.now() + SESSION_DURATION_MS;
         localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);
@@ -376,6 +386,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.success && data.user) {
+        if (data.token) {
+          localStorage.setItem('capstone_auth_token', data.token);
+        }
         const expiry = Date.now() + SESSION_DURATION_MS;
         localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);

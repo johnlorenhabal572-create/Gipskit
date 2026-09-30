@@ -20,25 +20,15 @@ const CustomerOrderHistory = () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
-      const myOrderIds = JSON.parse(localStorage.getItem('my_order_ids') || '[]');
-      const userEmail = user?.email?.trim();
-
-      // If the customer has no login email and no local order history, they have no orders
-      if (!userEmail && myOrderIds.length === 0) {
+      if (!user?.email) {
         setMyOrders([]);
         return;
       }
 
-      // Request only this customer's relevant orders from the backend
-      const fetchedOrders = await fetchOrders({
-        email: userEmail || undefined,
-        orderIds: myOrderIds.length > 0 ? myOrderIds : undefined
-      });
+      // Request customer's relevant orders from the backend (server enforces customer scope)
+      const fetchedOrders = await fetchOrders();
       
-      const userOrders = (fetchedOrders || []).filter(order => 
-        (myOrderIds.includes(order.id) || (userEmail && (order.userEmail === userEmail || order.customer?.email === userEmail))) && 
-        order.status !== 'Pending'
-      );
+      const userOrders = (fetchedOrders || []).filter(order => order.status !== 'Pending');
       
       userOrders.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
       setMyOrders(userOrders);

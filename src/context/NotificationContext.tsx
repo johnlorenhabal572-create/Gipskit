@@ -40,7 +40,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     lowStockItems: []
   });
 
+  const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
+
   const refreshNotifications = useCallback(async () => {
+    if (!isAdminOrStaff) return;
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
@@ -51,10 +54,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       isFetchingRef.current = false;
     }
-  }, []);
+  }, [isAdminOrStaff]);
 
   // Poll notifications automatically without excessive requests or overlapping
   useEffect(() => {
+    if (!isAdminOrStaff) {
+      setCounts({
+        customerOrderUpdates: 0,
+        adminNewOrders: 0,
+        adminLowStock: 0,
+        lowStockItems: []
+      });
+      return;
+    }
+
     refreshNotifications();
 
     const interval = setInterval(() => {
@@ -75,13 +88,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user?.email, user?.role, refreshNotifications]);
+  }, [isAdminOrStaff, refreshNotifications]);
 
   const markCustomerOrdersReadHandler = async (orderIds?: string[]) => {
     // Optimistically update UI
     setCounts(prev => ({ ...prev, customerOrderUpdates: 0 }));
     await markCustomerNotificationsRead(orderIds);
-    await refreshNotifications();
   };
 
   const markAdminOrdersAsReadHandler = async (orderIds?: string[]) => {

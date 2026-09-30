@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { connectMongoose, getDbStatus, memoryStore, mongoose } from './server/db';
 import { User, VerificationCode, Order } from './server/models';
 import { sendVerificationEmail } from './server/email';
+import { createSessionToken } from './server/auth';
 import productRoutes from './server/routes/productRoutes';
 import inventoryRoutes from './server/routes/inventoryRoutes';
 import orderRoutes from './server/routes/orderRoutes';
@@ -370,15 +371,23 @@ async function startServer() {
         });
       }
 
+      const token = createSessionToken({
+        id: newUserId,
+        email,
+        role: 'customer'
+      });
+
       return res.json({
         success: true,
         message: 'Account created successfully!',
+        token,
         user: {
           id: newUserId,
           email,
           name,
           role: 'customer',
-          status: 'Active'
+          status: 'Active',
+          isFirstLogin: true
         }
       });
     } catch (error) {
@@ -424,6 +433,21 @@ async function startServer() {
         });
       }
 
+      // Determine whether this is the first successful login BEFORE updating lastLogin and loginHistory
+      let isFirstLogin = false;
+      const historyList = Array.isArray(matchedUser.loginHistory) ? matchedUser.loginHistory : [];
+      const hasPriorSignIn = historyList.some((h: any) => h.action === 'User Sign In');
+
+      if (!hasPriorSignIn) {
+        const createdMs = matchedUser.createdAt ? new Date(matchedUser.createdAt).getTime() : 0;
+        const lastLoginMs = matchedUser.lastLogin ? new Date(matchedUser.lastLogin).getTime() : 0;
+
+        // If lastLogin is equal to createdAt (within 1s margin of creation) and no prior User Sign In exists
+        if (createdMs > 0 && lastLoginMs > 0 && Math.abs(lastLoginMs - createdMs) <= 1000) {
+          isFirstLogin = true;
+        }
+      }
+
       // Record login history and update last login
       const now = new Date();
       const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
@@ -457,14 +481,18 @@ async function startServer() {
         }
       }
 
+      const token = createSessionToken(matchedUser);
+
       return res.json({
         success: true,
+        token,
         user: {
           id: matchedUser.id || matchedUser._id?.toString(),
           email: matchedUser.email,
           name: matchedUser.name,
           role: matchedUser.role || 'customer',
-          status: matchedUser.status || 'Active'
+          status: matchedUser.status || 'Active',
+          isFirstLogin
         }
       });
     } catch (error) {

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Order, Product, InventoryItem, InventoryLog, User } from '../models';
 import { getDbStatus, memoryStore } from '../db';
 import { sendOrderStatusEmail } from '../email';
+import { authenticateToken, requireAdminOrStaff } from '../auth';
 
 const router = Router();
 
@@ -88,9 +89,11 @@ setTimeout(() => {
   backfillExistingOrderEmails().catch(() => {});
 }, 10000);
 
-// 1. GET /api/orders - Get all orders or filter (optimized indexed query, no writes on GET)
-router.get('/', async (req: Request, res: Response) => {
+// 1. GET /api/orders - Get orders (scoped to authenticated customer or full access for admin/staff)
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const currentUser = req.user!;
+    const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
     const { isConnected } = await getDbStatus();
     const { status, email, orderType, search, orderIds, limit } = req.query;
 
@@ -103,12 +106,22 @@ router.get('/', async (req: Request, res: Response) => {
         query.status = status;
       }
 
-      if (emailStr && idList.length > 0) {
-        query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }, { id: { $in: idList } }];
-      } else if (emailStr) {
-        query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }];
-      } else if (idList.length > 0) {
-        query.id = { $in: idList };
+      if (!isPrivileged) {
+        // Strict Customer Isolation: Customer MUST only retrieve their own orders.
+        // Ignore any client-supplied email or orderIds parameters meant to widen access.
+        query.$or = [
+          { userEmail: currentUser.email },
+          { 'customer.email': currentUser.email }
+        ];
+      } else {
+        // Admin / Staff access: support existing search/filter parameters
+        if (emailStr && idList.length > 0) {
+          query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }, { id: { $in: idList } }];
+        } else if (emailStr) {
+          query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }];
+        } else if (idList.length > 0) {
+          query.id = { $in: idList };
+        }
       }
 
       if (orderType) {
@@ -116,13 +129,14 @@ router.get('/', async (req: Request, res: Response) => {
       }
       if (search && typeof search === 'string') {
         const searchRegex = new RegExp(search.trim(), 'i');
-        const searchConditions = [
+        const searchConditions: any[] = [
           { id: searchRegex },
           { 'customer.name': searchRegex },
-          { 'customer.email': searchRegex },
-          { userEmail: searchRegex },
           { 'customer.phone': searchRegex }
         ];
+        if (isPrivileged) {
+          searchConditions.push({ 'customer.email': searchRegex }, { userEmail: searchRegex });
+        }
         if (query.$or) {
           query.$and = [{ $or: query.$or }, { $or: searchConditions }];
           delete query.$or;
@@ -145,15 +159,25 @@ router.get('/', async (req: Request, res: Response) => {
 
     // In-memory fallback
     let list = [...memoryStore.orders];
+
+    if (!isPrivileged) {
+      const customerEmail = currentUser.email.toLowerCase();
+      list = list.filter(o => 
+        (o.userEmail || '').toLowerCase() === customerEmail || 
+        (o.customer?.email || '').toLowerCase() === customerEmail
+      );
+    } else {
+      if (emailStr && idList.length > 0) {
+        list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr || idList.includes(o.id));
+      } else if (emailStr) {
+        list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr);
+      } else if (idList.length > 0) {
+        list = list.filter(o => idList.includes(o.id));
+      }
+    }
+
     if (status && status !== 'All') {
       list = list.filter(o => o.status === status);
-    }
-    if (emailStr && idList.length > 0) {
-      list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr || idList.includes(o.id));
-    } else if (emailStr) {
-      list = list.filter(o => o.userEmail === emailStr || o.customer?.email === emailStr);
-    } else if (idList.length > 0) {
-      list = list.filter(o => idList.includes(o.id));
     }
     if (orderType) {
       list = list.filter(o => o.orderType === orderType);
@@ -163,8 +187,7 @@ router.get('/', async (req: Request, res: Response) => {
       list = list.filter(o => 
         o.id?.toLowerCase().includes(s) || 
         o.customer?.name?.toLowerCase().includes(s) ||
-        o.customer?.email?.toLowerCase().includes(s) ||
-        o.userEmail?.toLowerCase().includes(s) ||
+        (isPrivileged && (o.customer?.email?.toLowerCase().includes(s) || o.userEmail?.toLowerCase().includes(s))) ||
         o.customer?.phone?.toLowerCase().includes(s)
       );
     }
@@ -183,8 +206,8 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2. GET /api/orders/stats/summary - Comprehensive sales statistics (optimized with database filtering and aggregation)
-router.get('/stats/summary', async (req: Request, res: Response) => {
+// 2. GET /api/orders/stats/summary - Comprehensive sales statistics (Admin/Staff only)
+router.get('/stats/summary', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
     const { period, date } = req.query; // period: 'day' | 'week' | 'month' | 'year' | 'all'
@@ -319,8 +342,8 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
   }
 });
 
-// 3. GET /api/orders/stats/product-analysis - Best & least selling items (optimized with MongoDB aggregation)
-router.get('/stats/product-analysis', async (req: Request, res: Response) => {
+// 3. GET /api/orders/stats/product-analysis - Best & least selling items (Admin/Staff only)
+router.get('/stats/product-analysis', authenticateToken, requireAdminOrStaff, async (req: Request, res: Response) => {
   try {
     const { isConnected } = await getDbStatus();
 
@@ -413,24 +436,35 @@ router.get('/stats/product-analysis', async (req: Request, res: Response) => {
   }
 });
 
-// 4. GET /api/orders/:id - Single order
-router.get('/:id', async (req: Request, res: Response) => {
+// 4. GET /api/orders/:id - Single order (scoped to owner customer or admin/staff)
+router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { isConnected } = await getDbStatus();
+    const currentUser = req.user!;
+    const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
 
+    let order: any = null;
     if (isConnected) {
-      const order = await Order.findOne({ id }).lean();
-      if (!order) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-      return res.json(normalizeOrderEmail(order));
+      order = await Order.findOne({ id }).lean();
+    } else {
+      order = memoryStore.orders.find(o => o.id === id);
     }
 
-    const order = memoryStore.orders.find(o => o.id === id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    // Customer ownership verification: customer can ONLY access their own orders
+    if (!isPrivileged) {
+      const customerEmail = currentUser.email.toLowerCase();
+      const orderUserEmail = (order.userEmail || '').toLowerCase();
+      const orderCustEmail = (order.customer?.email || '').toLowerCase();
+      if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
+        return res.status(403).json({ error: 'Access denied: You are not authorized to view this order.' });
+      }
+    }
+
     return res.json(normalizeOrderEmail(order));
   } catch (error) {
     console.error('Error fetching order:', error);
@@ -439,8 +473,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // 5. POST /api/orders - Create and process order + auto-deduct inventory
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const currentUser = req.user!;
+    const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
     const { items, customer, total, subtotal, amountPaid, change, paymentMethod, orderType, status, paymentStatus, userEmail, userName } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -454,17 +490,22 @@ router.post('/', async (req: Request, res: Response) => {
     const finalStatus = status || (finalOrderType === 'POS' ? 'Completed' : 'Pending');
     const finalPaymentStatus = paymentStatus || (finalStatus === 'Completed' ? 'Paid' : 'Unpaid');
 
-    const headerEmail = getUserEmail(req);
-    const resolvedEmail = (customer?.email && customer.email !== 'anonymous' ? customer.email.trim() : '') ||
-                          (userEmail && userEmail !== 'anonymous' ? userEmail.trim() : '') ||
-                          (headerEmail && headerEmail !== 'system' && headerEmail !== 'anonymous' ? headerEmail.trim() : '');
+    // Customer email MUST come from verified token for customer orders
+    let resolvedEmail = '';
+    if (!isPrivileged) {
+      resolvedEmail = currentUser.email;
+    } else {
+      resolvedEmail = (customer?.email && customer.email !== 'anonymous' ? customer.email.trim() : '') ||
+                      (userEmail && userEmail !== 'anonymous' ? userEmail.trim() : '') ||
+                      currentUser.email;
+    }
 
-    const performerEmail = headerEmail || resolvedEmail || 'system';
+    const performerEmail = currentUser.email || 'system';
 
     const orderDoc = {
       id: orderId,
       customer: {
-        name: customer?.name || userName || 'Walk-in Customer',
+        name: customer?.name || userName || (!isPrivileged ? 'Valued Customer' : 'Walk-in Customer'),
         email: resolvedEmail,
         phone: customer?.phone || '',
         address: customer?.address || '',
@@ -723,7 +764,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // 6. PATCH /api/orders/:id/status - Update order status
-router.patch('/:id/status', async (req: Request, res: Response) => {
+router.patch('/:id/status', authenticateToken, async (req: Request, res: Response) => {
   try {
     const rawId = req.params.id;
     const id = (Array.isArray(rawId) ? rawId[0] : rawId) || '';
@@ -733,12 +774,30 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Status is required' });
     }
 
+    const currentUser = req.user!;
+    const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
     const { isConnected } = await getDbStatus();
 
     if (isConnected) {
       const order = await Order.findOne({ id });
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Customer authorization check: customers may only cancel their own pending orders
+      if (!isPrivileged) {
+        const customerEmail = currentUser.email.toLowerCase();
+        const orderUserEmail = (order.userEmail || '').toLowerCase();
+        const orderCustEmail = (order.customer?.email || '').toLowerCase();
+        if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
+          return res.status(403).json({ error: 'Access denied: You are not authorized to modify this order.' });
+        }
+        if (status !== 'Cancelled') {
+          return res.status(403).json({ error: 'Customers are only permitted to cancel pending orders.' });
+        }
+        if (order.status !== 'Pending') {
+          return res.status(400).json({ error: 'Only pending orders can be cancelled.' });
+        }
       }
 
       // Safeguard: A cancelled order must not be able to proceed to Processing, Cooking, Ready for Pickup, or Completed
@@ -861,6 +920,22 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    if (!isPrivileged) {
+      const targetOrder = memoryStore.orders[orderIdx];
+      const customerEmail = currentUser.email.toLowerCase();
+      const orderUserEmail = (targetOrder.userEmail || '').toLowerCase();
+      const orderCustEmail = (targetOrder.customer?.email || '').toLowerCase();
+      if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
+        return res.status(403).json({ error: 'Access denied: You are not authorized to modify this order.' });
+      }
+      if (status !== 'Cancelled') {
+        return res.status(403).json({ error: 'Customers are only permitted to cancel pending orders.' });
+      }
+      if (targetOrder.status !== 'Pending') {
+        return res.status(400).json({ error: 'Only pending orders can be cancelled.' });
+      }
+    }
+
     if (memoryStore.orders[orderIdx].status === 'Cancelled' && status !== 'Cancelled') {
       return res.status(400).json({ error: 'This order has been cancelled and cannot proceed to any other status.' });
     }
@@ -946,10 +1021,12 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
 });
 
 // 7. PATCH /api/orders/:id/payment - Update payment details / screenshot
-router.patch('/:id/payment', async (req: Request, res: Response) => {
+router.patch('/:id/payment', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { paymentScreenshot, paymentStatus, paymentMethod, amountPaid, change } = req.body;
+    const currentUser = req.user!;
+    const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
 
     const { isConnected } = await getDbStatus();
 
@@ -957,6 +1034,16 @@ router.patch('/:id/payment', async (req: Request, res: Response) => {
       const order = await Order.findOne({ id });
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Customer authorization check: customers can ONLY update payment for their own order
+      if (!isPrivileged) {
+        const customerEmail = currentUser.email.toLowerCase();
+        const orderUserEmail = (order.userEmail || '').toLowerCase();
+        const orderCustEmail = (order.customer?.email || '').toLowerCase();
+        if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
+          return res.status(403).json({ error: 'Access denied: You are not authorized to update payment for this order.' });
+        }
       }
 
       if (order.status === 'Cancelled') {
@@ -976,6 +1063,16 @@ router.patch('/:id/payment', async (req: Request, res: Response) => {
     const orderIdx = memoryStore.orders.findIndex(o => o.id === id);
     if (orderIdx === -1) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (!isPrivileged) {
+      const targetOrder = memoryStore.orders[orderIdx];
+      const customerEmail = currentUser.email.toLowerCase();
+      const orderUserEmail = (targetOrder.userEmail || '').toLowerCase();
+      const orderCustEmail = (targetOrder.customer?.email || '').toLowerCase();
+      if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
+        return res.status(403).json({ error: 'Access denied: You are not authorized to update payment for this order.' });
+      }
     }
 
     if (memoryStore.orders[orderIdx].status === 'Cancelled') {

@@ -455,7 +455,7 @@ export const CustomerDashboard = () => {
 
           <div className="relative z-10 p-6 sm:p-10 max-w-xl">
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-2 leading-tight">
-              Welcome back, <br className="hidden sm:inline" />
+              {user?.isFirstLogin ? 'Welcome,' : 'Welcome back,'} <br className="hidden sm:inline" />
               <span className="text-amber-400">{user?.name || 'Valued Customer'}!</span>
             </h1>
             <p className="text-stone-200 text-sm sm:text-base font-medium mb-5">

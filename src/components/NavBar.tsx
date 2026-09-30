@@ -76,11 +76,10 @@ const Navbar = () => {
   const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   // Calculate total unread notifications for the user
-  const totalUnreadNotifications = user?.role === 'customer' 
-    ? customerOrderUpdates 
-    : ((user?.role === 'admin' || user?.role === 'staff') 
-        ? (adminNewOrders + adminLowStock) 
-        : 0);
+  const totalUnreadNotifications =
+    (user?.role === 'admin' || user?.role === 'staff')
+      ? (adminNewOrders + adminLowStock)
+      : 0;
 
   // Close dropdown on click/tap outside or pressing Escape
   useEffect(() => {
@@ -172,7 +171,7 @@ const Navbar = () => {
         {
           title: 'My Orders',
           links: [
-            { name: 'Order History', path: '/my-orders', icon: <ClipboardList size={20} />, badge: customerOrderUpdates },
+            { name: 'Order History', path: '/my-orders', icon: <ClipboardList size={20} /> },
             { name: 'My Bill', path: '/my-bill', icon: <Receipt size={20} /> },
           ]
         }
