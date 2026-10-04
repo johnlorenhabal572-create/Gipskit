@@ -33,6 +33,7 @@ export interface IOrder extends Document {
   paymentMethod: string;
   paymentStatus: 'Unpaid' | 'Paid' | 'Refunded' | 'Cancelled';
   status: 'Pending' | 'Paid' | 'Processing' | 'Cooking' | 'Ready for Pickup' | 'Ready to Pickup' | 'On Delivery' | 'Completed' | 'Cancelled';
+  cancelledBy?: 'customer' | 'admin' | 'staff' | null;
   orderType: 'POS' | 'Online';
   paymentScreenshot?: string;
   adminViewed?: boolean;
@@ -96,6 +97,12 @@ const OrderSchema: Schema<IOrder> = new Schema(
       type: String, 
       enum: ['Pending', 'Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup', 'On Delivery', 'Completed', 'Cancelled'], 
       default: 'Pending',
+      index: true
+    },
+    cancelledBy: {
+      type: String,
+      enum: ['customer', 'admin', 'staff', null],
+      default: null,
       index: true
     },
     orderType: { 

@@ -38,6 +38,8 @@ router.get('/counts', authenticateToken, async (req: Request, res: Response) => 
       // Admin Notifications: Only computed if verified role is admin or staff
       if (role === 'admin' || role === 'staff') {
         adminNewOrders = await Order.countDocuments({
+          orderType: 'Online',
+          status: 'Paid',
           adminViewed: { $ne: true }
         });
 
@@ -75,7 +77,11 @@ router.get('/counts', authenticateToken, async (req: Request, res: Response) => 
       }
 
       if (role === 'admin' || role === 'staff') {
-        adminNewOrders = memoryStore.orders.filter(order => order.adminViewed !== true).length;
+        adminNewOrders = memoryStore.orders.filter(order => 
+          order.orderType === 'Online' && 
+          order.status === 'Paid' && 
+          order.adminViewed !== true
+        ).length;
 
         for (const item of memoryStore.inventory) {
           const threshold = item.lowStockThreshold !== undefined ? item.lowStockThreshold : 10;
@@ -162,13 +168,25 @@ router.post('/admin/mark-orders-read', authenticateToken, requireAdminOrStaff, a
     const now = new Date();
 
     if (isConnected) {
-      const filter: any = ids.length > 0 ? { id: { $in: ids } } : { adminViewed: { $ne: true } };
+      const filter: any = {
+        orderType: 'Online',
+        status: 'Paid',
+        adminViewed: { $ne: true }
+      };
+      if (ids.length > 0) {
+        filter.id = { $in: ids };
+      }
       await Order.updateMany(filter, {
         $set: { adminViewed: true, adminViewedAt: now }
       });
     } else {
       for (const order of memoryStore.orders) {
-        if (ids.length === 0 || ids.includes(order.id)) {
+        if (
+          order.orderType === 'Online' &&
+          order.status === 'Paid' &&
+          order.adminViewed !== true &&
+          (ids.length === 0 || ids.includes(order.id))
+        ) {
           order.adminViewed = true;
           order.adminViewedAt = now;
         }

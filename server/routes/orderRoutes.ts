@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Order, Product, InventoryItem, InventoryLog, User } from '../models';
 import { getDbStatus, memoryStore } from '../db';
-import { sendOrderStatusEmail } from '../email';
 import { authenticateToken, requireAdminOrStaff } from '../auth';
 
 const router = Router();
@@ -95,32 +94,71 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const currentUser = req.user!;
     const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
     const { isConnected } = await getDbStatus();
-    const { status, email, orderType, search, orderIds, limit } = req.query;
+    const { status, email, orderType, search, orderIds, limit, scope } = req.query;
 
     const emailStr = typeof email === 'string' ? email.trim() : '';
     const idList = orderIds ? String(orderIds).split(',').map(s => s.trim()).filter(Boolean) : [];
 
     if (isConnected) {
       const query: any = {};
-      if (status && status !== 'All') {
-        query.status = status;
-      }
+      const andConditions: any[] = [];
 
       if (!isPrivileged) {
         // Strict Customer Isolation: Customer MUST only retrieve their own orders.
         // Ignore any client-supplied email or orderIds parameters meant to widen access.
-        query.$or = [
-          { userEmail: currentUser.email },
-          { 'customer.email': currentUser.email }
-        ];
+        andConditions.push({
+          $or: [
+            { userEmail: currentUser.email },
+            { 'customer.email': currentUser.email }
+          ]
+        });
       } else {
         // Admin / Staff access: support existing search/filter parameters
         if (emailStr && idList.length > 0) {
-          query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }, { id: { $in: idList } }];
+          andConditions.push({
+            $or: [{ userEmail: emailStr }, { 'customer.email': emailStr }, { id: { $in: idList } }]
+          });
         } else if (emailStr) {
-          query.$or = [{ userEmail: emailStr }, { 'customer.email': emailStr }];
+          andConditions.push({
+            $or: [{ userEmail: emailStr }, { 'customer.email': emailStr }]
+          });
         } else if (idList.length > 0) {
           query.id = { $in: idList };
+        }
+      }
+
+      if (scope === 'manage') {
+        const manageStatuses = ['Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup'];
+        if (status && status !== 'All') {
+          if (manageStatuses.includes(status as string)) {
+            query.status = status;
+          } else {
+            query.status = { $in: [] };
+          }
+        } else {
+          query.status = { $in: manageStatuses };
+        }
+      } else if (scope === 'history') {
+        if (status && status !== 'All') {
+          if (status === 'Completed') {
+            query.status = 'Completed';
+          } else if (status === 'Cancelled') {
+            query.status = 'Cancelled';
+            query.cancelledBy = { $in: ['admin', 'staff'] };
+          } else {
+            query.status = { $in: [] };
+          }
+        } else {
+          andConditions.push({
+            $or: [
+              { status: 'Completed' },
+              { status: 'Cancelled', cancelledBy: { $in: ['admin', 'staff'] } }
+            ]
+          });
+        }
+      } else {
+        if (status && status !== 'All') {
+          query.status = status;
         }
       }
 
@@ -137,12 +175,13 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         if (isPrivileged) {
           searchConditions.push({ 'customer.email': searchRegex }, { userEmail: searchRegex });
         }
-        if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: searchConditions }];
-          delete query.$or;
-        } else {
-          query.$or = searchConditions;
-        }
+        andConditions.push({ $or: searchConditions });
+      }
+
+      if (andConditions.length === 1) {
+        Object.assign(query, andConditions[0]);
+      } else if (andConditions.length > 1) {
+        query.$and = andConditions;
       }
 
       let orderQuery = Order.find(query).sort({ createdAt: -1 });
@@ -176,8 +215,24 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       }
     }
 
-    if (status && status !== 'All') {
-      list = list.filter(o => o.status === status);
+    if (scope === 'manage') {
+      const manageStatuses = ['Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup'];
+      list = list.filter(o => manageStatuses.includes(o.status));
+      if (status && status !== 'All') {
+        list = list.filter(o => o.status === status);
+      }
+    } else if (scope === 'history') {
+      list = list.filter(o => 
+        o.status === 'Completed' || 
+        (o.status === 'Cancelled' && (o.cancelledBy === 'admin' || o.cancelledBy === 'staff'))
+      );
+      if (status && status !== 'All') {
+        list = list.filter(o => o.status === status);
+      }
+    } else {
+      if (status && status !== 'All') {
+        list = list.filter(o => o.status === status);
+      }
     }
     if (orderType) {
       list = list.filter(o => o.orderType === orderType);
@@ -490,6 +545,28 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     const finalStatus = status || (finalOrderType === 'POS' ? 'Completed' : 'Pending');
     const finalPaymentStatus = paymentStatus || (finalStatus === 'Completed' ? 'Paid' : 'Unpaid');
 
+    // Strict validation for Online / Customer orders (POS orders bypass this to support walk-in flexibility)
+    if (finalOrderType !== 'POS') {
+      const rawName = (customer?.name || userName || '').trim();
+      if (!rawName) {
+        return res.status(400).json({ error: 'Customer Full Name is required.' });
+      }
+      if (rawName.length > 50) {
+        return res.status(400).json({ error: 'Customer Full Name cannot exceed 50 characters.' });
+      }
+      if (/[0-9]/.test(rawName)) {
+        return res.status(400).json({ error: 'Customer Full Name must not contain numbers.' });
+      }
+
+      const rawPhone = (customer?.phone || '').trim();
+      if (!rawPhone) {
+        return res.status(400).json({ error: 'Customer Phone Number is required.' });
+      }
+      if (!/^\d{11}$/.test(rawPhone)) {
+        return res.status(400).json({ error: 'Customer Phone Number must contain exactly 11 digits.' });
+      }
+    }
+
     // Customer email MUST come from verified token for customer orders
     let resolvedEmail = '';
     if (!isPrivileged) {
@@ -502,17 +579,24 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
     const performerEmail = currentUser.email || 'system';
 
+    const resolvedCustomerName = finalOrderType !== 'POS'
+      ? (customer?.name || userName || '').trim()
+      : (customer?.name || userName || (!isPrivileged ? 'Valued Customer' : 'Walk-in Customer'));
+    const resolvedPhone = finalOrderType !== 'POS'
+      ? (customer?.phone || '').trim()
+      : (customer?.phone || '');
+
     const orderDoc = {
       id: orderId,
       customer: {
-        name: customer?.name || userName || (!isPrivileged ? 'Valued Customer' : 'Walk-in Customer'),
+        name: resolvedCustomerName,
         email: resolvedEmail,
-        phone: customer?.phone || '',
+        phone: resolvedPhone,
         address: customer?.address || '',
         facebook: customer?.facebook || ''
       },
       userEmail: resolvedEmail,
-      userName: userName || customer?.name || '',
+      userName: resolvedCustomerName,
       items: items.map(item => {
         const linkIds: string[] = Array.isArray(item.inventoryLinkIds) && item.inventoryLinkIds.length > 0
           ? item.inventoryLinkIds
@@ -784,7 +868,7 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      // Customer authorization check: customers may only cancel their own pending orders
+      // Customer authorization check: customers may only confirm payment or cancel their own pending orders
       if (!isPrivileged) {
         const customerEmail = currentUser.email.toLowerCase();
         const orderUserEmail = (order.userEmail || '').toLowerCase();
@@ -792,11 +876,11 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
         if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
           return res.status(403).json({ error: 'Access denied: You are not authorized to modify this order.' });
         }
-        if (status !== 'Cancelled') {
-          return res.status(403).json({ error: 'Customers are only permitted to cancel pending orders.' });
+        if (status !== 'Cancelled' && status !== 'Paid') {
+          return res.status(403).json({ error: 'Customers are only permitted to confirm payment or cancel pending orders.' });
         }
         if (order.status !== 'Pending') {
-          return res.status(400).json({ error: 'Only pending orders can be cancelled.' });
+          return res.status(400).json({ error: 'Only pending orders can be updated by customer.' });
         }
       }
 
@@ -811,6 +895,20 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
         order.paymentStatus = 'Paid';
       } else if (status === 'Cancelled') {
         order.paymentStatus = 'Cancelled';
+        if (currentUser.role === 'customer') {
+          order.cancelledBy = 'customer';
+        } else if (currentUser.role === 'admin') {
+          order.cancelledBy = 'admin';
+        } else if (currentUser.role === 'staff') {
+          order.cancelledBy = 'staff';
+        }
+      }
+
+      // When an ONLINE order transitions to database status 'Paid':
+      // set adminViewed = false and reset adminViewedAt so the payment becomes a new admin notification
+      if (status === 'Paid' && order.orderType === 'Online') {
+        order.adminViewed = false;
+        order.adminViewedAt = null;
       }
 
       // Auto-restock inventory/products if cancelling an active order
@@ -871,47 +969,6 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
 
       await order.save();
 
-      // Only send notification when the corresponding status button is actually clicked and the status successfully changes
-      if (previousStatus !== status) {
-        let orderWithEmail: any = order.toObject ? order.toObject() : { ...order };
-        const hasDirectEmail = (order.customer?.email && order.customer.email.includes('@')) || (order.userEmail && order.userEmail.includes('@'));
-        if (!hasDirectEmail) {
-          try {
-            const registeredUser = await User.findOne({
-              $or: [
-                { name: order.customer?.name },
-                { name: order.userName },
-                { phone: order.customer?.phone }
-              ]
-            }).lean();
-            if (registeredUser?.email) {
-              orderWithEmail.userEmail = registeredUser.email;
-            }
-          } catch (userLookupErr) {
-            console.warn('[Order Status] User email lookup failed:', userLookupErr);
-          }
-        }
-
-        if (status === 'Processing') {
-          // 1. Process Order / Processing:
-          // When admin clicks Process Order and status changes to Processing,
-          // send email telling customer order is confirmed and is being processed.
-          sendOrderStatusEmail(orderWithEmail, 'Processing').catch(err => {
-            console.error(`[Order Email] Error sending Processing email for order ${id}:`, err);
-          });
-        } else if (status === 'Ready for Pickup' || status === 'Ready to Pickup') {
-          // 3. Ready for Pickup:
-          // When admin clicks Ready for Pickup and status changes to Ready for Pickup,
-          // send email telling customer order is ready for pickup.
-          sendOrderStatusEmail(orderWithEmail, 'Ready for Pickup').catch(err => {
-            console.error(`[Order Email] Error sending Ready for Pickup email for order ${id}:`, err);
-          });
-        }
-        // 2. Cooking:
-        // When changed from Processing -> Cooking, DO NOT send an email.
-        // Status updates normally and is visible in order-status system without emailing.
-      }
-
       return res.json(order);
     }
 
@@ -928,11 +985,11 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
       if (orderUserEmail !== customerEmail && orderCustEmail !== customerEmail) {
         return res.status(403).json({ error: 'Access denied: You are not authorized to modify this order.' });
       }
-      if (status !== 'Cancelled') {
-        return res.status(403).json({ error: 'Customers are only permitted to cancel pending orders.' });
+      if (status !== 'Cancelled' && status !== 'Paid') {
+        return res.status(403).json({ error: 'Customers are only permitted to confirm payment or cancel pending orders.' });
       }
       if (targetOrder.status !== 'Pending') {
-        return res.status(400).json({ error: 'Only pending orders can be cancelled.' });
+        return res.status(400).json({ error: 'Only pending orders can be updated by customer.' });
       }
     }
 
@@ -946,6 +1003,20 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
       memoryStore.orders[orderIdx].paymentStatus = 'Paid';
     } else if (status === 'Cancelled') {
       memoryStore.orders[orderIdx].paymentStatus = 'Cancelled';
+      if (currentUser.role === 'customer') {
+        memoryStore.orders[orderIdx].cancelledBy = 'customer';
+      } else if (currentUser.role === 'admin') {
+        memoryStore.orders[orderIdx].cancelledBy = 'admin';
+      } else if (currentUser.role === 'staff') {
+        memoryStore.orders[orderIdx].cancelledBy = 'staff';
+      }
+    }
+
+    // When an ONLINE order transitions to database status 'Paid':
+    // set adminViewed = false and reset adminViewedAt so the payment becomes a new admin notification
+    if (status === 'Paid' && memoryStore.orders[orderIdx].orderType === 'Online') {
+      memoryStore.orders[orderIdx].adminViewed = false;
+      memoryStore.orders[orderIdx].adminViewedAt = null;
     }
 
     if (status === 'Cancelled' && previousStatus !== 'Cancelled') {
@@ -988,31 +1059,6 @@ router.patch('/:id/status', authenticateToken, async (req: Request, res: Respons
 
     const updatedOrder = memoryStore.orders[orderIdx];
 
-    if (previousStatus !== status) {
-      let orderWithEmail = { ...updatedOrder };
-      const hasDirectEmail = (updatedOrder.customer?.email && updatedOrder.customer.email.includes('@')) || (updatedOrder.userEmail && updatedOrder.userEmail.includes('@'));
-      if (!hasDirectEmail) {
-        const registeredUser = memoryStore.users.find(u => 
-          (updatedOrder.customer?.name && u.name === updatedOrder.customer.name) ||
-          (updatedOrder.userName && u.name === updatedOrder.userName) ||
-          (updatedOrder.customer?.phone && (u as any).phone === updatedOrder.customer.phone)
-        );
-        if (registeredUser?.email) {
-          orderWithEmail.userEmail = registeredUser.email;
-        }
-      }
-
-      if (status === 'Processing') {
-        sendOrderStatusEmail(orderWithEmail, 'Processing').catch(err => {
-          console.error(`[Order Email] Error sending Processing email for order ${id}:`, err);
-        });
-      } else if (status === 'Ready for Pickup' || status === 'Ready to Pickup') {
-        sendOrderStatusEmail(orderWithEmail, 'Ready for Pickup').catch(err => {
-          console.error(`[Order Email] Error sending Ready for Pickup email for order ${id}:`, err);
-        });
-      }
-    }
-
     return res.json(updatedOrder);
   } catch (error) {
     console.error('Error updating order status:', error);
@@ -1027,6 +1073,36 @@ router.patch('/:id/payment', authenticateToken, async (req: Request, res: Respon
     const { paymentScreenshot, paymentStatus, paymentMethod, amountPaid, change } = req.body;
     const currentUser = req.user!;
     const isPrivileged = currentUser.role === 'admin' || currentUser.role === 'staff';
+
+    // Validate paymentScreenshot before processing or saving
+    if (paymentScreenshot !== undefined) {
+      const isString = typeof paymentScreenshot === 'string';
+      const allowedPrefixes = [
+        'data:image/jpeg;base64,',
+        'data:image/png;base64,',
+        'data:image/webp;base64,'
+      ];
+
+      const matchedPrefix = isString ? allowedPrefixes.find(p => paymentScreenshot.startsWith(p)) : null;
+
+      // Enforce reasonable maximum paymentScreenshot string size (approx 2 MB encoded payload)
+      const MAX_SCREENSHOT_LENGTH = 2.5 * 1024 * 1024;
+      const isValidLength = isString && paymentScreenshot.length > 0 && paymentScreenshot.length <= MAX_SCREENSHOT_LENGTH;
+
+      // Validate base64 payload integrity
+      let isValidBase64 = false;
+      if (isString && matchedPrefix && isValidLength) {
+        const base64Data = paymentScreenshot.slice(matchedPrefix.length).trim();
+        const base64Regex = /^[A-Za-z0-9+/=]+$/;
+        isValidBase64 = base64Data.length >= 32 && base64Regex.test(base64Data);
+      }
+
+      if (!isString || !matchedPrefix || !isValidLength || !isValidBase64) {
+        return res.status(400).json({
+          error: "Payment receipt must be a valid image (JPEG, PNG, or WebP) and must not exceed the allowed size."
+        });
+      }
+    }
 
     const { isConnected } = await getDbStatus();
 

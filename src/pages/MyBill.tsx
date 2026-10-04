@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from 'react';
 import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { Receipt, QrCode, Upload, CheckCircle2, AlertCircle, ShoppingBag, RefreshCw, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { formatPrice } from '../utils/format';
@@ -21,6 +22,7 @@ const MyBill = () => {
   const [loadingInitial, setLoadingInitial] = useState<boolean>(!newOrderFromNav);
   const { user } = useContext(AuthContext) as any;
   const { showNotification } = useContext(CartContext) as any;
+  const confirm = useConfirm();
   const navigate = useNavigate();
 
   const loadBills = async () => {
@@ -48,25 +50,129 @@ const MyBill = () => {
     return () => clearInterval(interval);
   }, [user]);
 
-  const handleFileUpload = (orderId: string, e: any) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        setUploading(orderId);
-        try {
-          await modifyOrderPayment(orderId, { 
-            paymentScreenshot: reader.result,
-            paymentStatus: 'Paid' 
-          });
-          await loadBills();
-        } catch (err) {
-          console.error('Failed to upload screenshot:', err);
-        } finally {
-          setUploading(null);
+// Helper to compress and resize receipt images using browser Canvas API
+function compressReceiptImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      try {
+        const MAX_DIMENSION = 1600;
+        let { width, height } = img;
+
+        if (width <= 0 || height <= 0) {
+          return reject(new Error('Invalid image dimensions.'));
         }
-      };
-      reader.readAsDataURL(file);
+
+        // Preserve aspect ratio while ensuring width and height do not exceed MAX_DIMENSION
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIMENSION) / width);
+            width = MAX_DIMENSION;
+          } else {
+            width = Math.round((width * MAX_DIMENSION) / height);
+            height = MAX_DIMENSION;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Failed to create canvas context for image compression.'));
+        }
+
+        // Fill white background in case source image has transparency
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Target: ~1.5 MB or less (1.5 MB binary is ~2,097,152 base64 characters)
+        const MAX_DATA_URL_LENGTH = 1.5 * 1024 * 1024 * (4 / 3);
+
+        let quality = 0.85;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        // Progressive quality step-down if output exceeds 1.5 MB
+        while (dataUrl.length > MAX_DATA_URL_LENGTH && quality > 0.45) {
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        // Progressive dimensional scaling step-down if still too large
+        let currentWidth = width;
+        let currentHeight = height;
+        while (dataUrl.length > MAX_DATA_URL_LENGTH && currentWidth > 800) {
+          currentWidth = Math.round(currentWidth * 0.8);
+          currentHeight = Math.round(currentHeight * 0.8);
+          canvas.width = currentWidth;
+          canvas.height = currentHeight;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, currentWidth, currentHeight);
+          ctx.drawImage(img, 0, 0, currentWidth, currentHeight);
+          dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        }
+
+        resolve(dataUrl);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image file. Please ensure the file is a valid image.'));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+  const handleFileUpload = async (orderId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input value so selecting the same file again triggers the event
+    e.target.value = '';
+
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedExtensions = /\.(jpe?g|png|webp)$/i;
+
+    const fileType = (file.type || '').toLowerCase();
+    const fileName = (file.name || '').toLowerCase();
+
+    // Reject PDF, DOC/DOCX, TXT, ZIP, and other non-image files
+    if (!allowedMimeTypes.includes(fileType) || !allowedExtensions.test(fileName)) {
+      setPaymentError(prev => ({
+        ...prev,
+        [orderId]: "Please upload a valid receipt image (JPEG, PNG, or WebP). PDF and document files are not supported."
+      }));
+      return;
+    }
+
+    setPaymentError(prev => ({ ...prev, [orderId]: '' }));
+    setUploading(orderId);
+
+    try {
+      const compressedDataUrl = await compressReceiptImage(file);
+      await modifyOrderPayment(orderId, { 
+        paymentScreenshot: compressedDataUrl,
+        paymentStatus: 'Paid' 
+      });
+      await loadBills();
+    } catch (err: any) {
+      console.error('Failed to upload screenshot:', err);
+      setPaymentError(prev => ({
+        ...prev,
+        [orderId]: err?.message || 'Failed to process receipt image. Please try another image.'
+      }));
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -99,7 +205,14 @@ const MyBill = () => {
   const handleCancelOrder = async (orderId: string) => {
     if (cancellingOrderId || processingPaymentId) return;
 
-    if (!window.confirm('Are you sure you want to cancel this order?')) {
+    const confirmed = await confirm({
+      title: 'Cancel Order?',
+      message: 'Are you sure you want to cancel this order?',
+      confirmText: 'Cancel Order',
+      cancelText: 'Keep Order',
+      variant: 'destructive'
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -243,11 +356,11 @@ const MyBill = () => {
                                     <Upload size={24} />
                                   </div>
                                   <p className="text-dark font-bold text-sm mb-0.5">Click or drag screenshot here</p>
-                                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">PNG, JPG or JPEG image</p>
+                                  <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">PNG, JPG, JPEG or WEBP image</p>
                                 </>
                               )}
                             </div>
-                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(bill.id, e)} disabled={uploading === bill.id} />
+                            <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(e) => handleFileUpload(bill.id, e)} disabled={uploading === bill.id} />
                           </label>
                         </div>
                       )}

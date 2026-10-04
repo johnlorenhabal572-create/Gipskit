@@ -38,7 +38,7 @@ export const AccountManagement = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'customer' | 'staff' | 'admin'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Suspended' | 'Disabled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Suspended'>('all');
   
   // Modals
   const [isAdding, setIsAdding] = useState(false);
@@ -101,7 +101,7 @@ export const AccountManagement = () => {
     }
   };
 
-  const handleStatusChange = async (userId: string, newStatus: 'Active' | 'Suspended' | 'Disabled', userName: string) => {
+  const handleStatusChange = async (userId: string, newStatus: 'Active' | 'Suspended', userName: string) => {
     setActionMenuOpenId(null);
     try {
       await updateUserStatus(userId, newStatus);
@@ -172,11 +172,9 @@ export const AccountManagement = () => {
     const total = accounts.length;
     const active = accounts.filter((a: any) => (a.status || 'Active') === 'Active').length;
     const suspended = accounts.filter((a: any) => a.status === 'Suspended').length;
-    const disabled = accounts.filter((a: any) => a.status === 'Disabled').length;
     const customers = accounts.filter((a: any) => (a.role || 'customer') === 'customer').length;
-    const staffAndAdmin = accounts.filter((a: any) => a.role === 'admin' || a.role === 'staff').length;
 
-    return { total, active, suspended, disabled, customers, staffAndAdmin };
+    return { total, active, suspended, customers };
   }, [accounts]);
 
   return (
@@ -224,7 +222,7 @@ export const AccountManagement = () => {
         </div>
 
         {/* Stats Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
             <div className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Total Registered</div>
             <div className="text-xl font-black text-dark mt-1">{stats.total}</div>
@@ -238,16 +236,8 @@ export const AccountManagement = () => {
             <div className="text-xl font-black text-amber-600 mt-1">{stats.suspended}</div>
           </div>
           <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
-            <div className="text-rose-700 text-[10px] font-bold uppercase tracking-wider">Disabled</div>
-            <div className="text-xl font-black text-rose-600 mt-1">{stats.disabled}</div>
-          </div>
-          <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
             <div className="text-blue-700 text-[10px] font-bold uppercase tracking-wider">Customers</div>
             <div className="text-xl font-black text-blue-600 mt-1">{stats.customers}</div>
-          </div>
-          <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm">
-            <div className="text-purple-700 text-[10px] font-bold uppercase tracking-wider">Staff / Admins</div>
-            <div className="text-xl font-black text-purple-600 mt-1">{stats.staffAndAdmin}</div>
           </div>
         </div>
 
@@ -299,7 +289,6 @@ export const AccountManagement = () => {
                 <option value="all">All Statuses</option>
                 <option value="Active">Active</option>
                 <option value="Suspended">Suspended</option>
-                <option value="Disabled">Disabled</option>
               </select>
             </div>
 
@@ -319,7 +308,7 @@ export const AccountManagement = () => {
           <div className="flex items-center gap-2.5">
             <ShieldAlert size={18} className="text-amber-600 shrink-0" />
             <span>
-              <strong>Record Retention Policy:</strong> Accounts cannot be permanently erased to guarantee customer transaction histories and payment receipts remain fully auditable. Deactivate accounts using <strong>Suspend</strong> or <strong>Disable</strong>.
+              <strong>Record Retention Policy:</strong> Accounts cannot be permanently erased to guarantee customer transaction histories and payment receipts remain fully auditable. Deactivate accounts using <strong>Suspend</strong>.
             </span>
           </div>
         </div>
@@ -404,16 +393,14 @@ export const AccountManagement = () => {
                         {/* Status */}
                         <td className="py-3.5 px-4">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                            accStatus === 'Active'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : accStatus === 'Suspended'
+                            accStatus === 'Suspended'
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
-                              accStatus === 'Active' ? 'bg-emerald-500' : accStatus === 'Suspended' ? 'bg-amber-500' : 'bg-rose-500'
+                              accStatus === 'Suspended' ? 'bg-amber-500' : 'bg-emerald-500'
                             }`} />
-                            {accStatus}
+                            {accStatus === 'Suspended' ? 'Suspended' : 'Active'}
                           </span>
                         </td>
 
@@ -456,7 +443,7 @@ export const AccountManagement = () => {
                         {/* Action Status Menu */}
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {accStatus !== 'Active' && (
+                            {accStatus === 'Suspended' && (
                               <button
                                 onClick={() => handleStatusChange(acc.id || acc._id, 'Active', acc.name)}
                                 className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
@@ -466,7 +453,7 @@ export const AccountManagement = () => {
                               </button>
                             )}
 
-                            {accStatus === 'Active' && (
+                            {accStatus !== 'Suspended' && (
                               <button
                                 onClick={() => handleStatusChange(acc.id || acc._id, 'Suspended', acc.name)}
                                 disabled={isCurrent}
@@ -478,21 +465,6 @@ export const AccountManagement = () => {
                                 title="Suspend Account"
                               >
                                 <AlertTriangle size={12} /> Suspend
-                              </button>
-                            )}
-
-                            {accStatus !== 'Disabled' && (
-                              <button
-                                onClick={() => handleStatusChange(acc.id || acc._id, 'Disabled', acc.name)}
-                                disabled={isCurrent}
-                                className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1 border ${
-                                  isCurrent 
-                                    ? 'text-gray-300 border-gray-200 cursor-not-allowed' 
-                                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200'
-                                }`}
-                                title="Disable Account"
-                              >
-                                <Slash size={12} /> Disable
                               </button>
                             )}
                           </div>
@@ -687,7 +659,6 @@ export const AccountManagement = () => {
                       >
                         <option value="Active">Active</option>
                         <option value="Suspended">Suspended</option>
-                        <option value="Disabled">Disabled</option>
                       </select>
                     </div>
                   </div>

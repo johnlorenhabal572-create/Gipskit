@@ -19,10 +19,10 @@ function sanitizeString(input: unknown, maxLength = 255): string {
   return input.trim().slice(0, maxLength);
 }
 
-// Gmail format validator: must be a valid @gmail.com address
-function isGmailAddress(email: string): boolean {
-  const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
-  return gmailRegex.test(email);
+// Email format validator: must be a valid email address (supports standard, educational, and corporate domains)
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/i;
+  return emailRegex.test(email);
 }
 
 // Password rules: Exactly 8 characters total, with at least 1 uppercase letter and 1 number
@@ -104,11 +104,11 @@ async function startServer() {
       const email = sanitizeString(req.body.email).toLowerCase();
 
       if (!email) {
-        return res.status(400).json({ error: 'Please enter your Gmail address.' });
+        return res.status(400).json({ error: 'Please enter your email address.' });
       }
 
-      if (!isGmailAddress(email)) {
-        return res.status(400).json({ error: 'Please enter a valid Gmail address ending in @gmail.com' });
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address.' });
       }
 
       const { isConnected } = await getDbStatus();
@@ -123,7 +123,7 @@ async function startServer() {
       if (!existingUser) {
         return res.status(404).json({ 
           exists: false,
-          error: 'No account was found with this Gmail address.' 
+          error: 'No account was found with this email address.' 
         });
       }
 
@@ -137,18 +137,18 @@ async function startServer() {
     }
   });
 
-  // 3. Send 6-Digit Verification Code to Gmail
+  // 3. Send 6-Digit Verification Code
   app.post('/api/auth/send-code', async (req, res) => {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
       const purpose = sanitizeString(req.body.purpose) || 'signup';
 
       if (!email) {
-        return res.status(400).json({ error: 'Please enter a Gmail address.' });
+        return res.status(400).json({ error: 'Please enter an email address.' });
       }
 
-      if (!isGmailAddress(email)) {
-        return res.status(400).json({ error: 'Requires a valid Gmail account ending in @gmail.com' });
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Requires a valid email address.' });
       }
 
       const { isConnected } = await getDbStatus();
@@ -164,7 +164,7 @@ async function startServer() {
 
         if (existingUser) {
           return res.status(400).json({ 
-            error: 'An account with this Gmail address already exists. Please Sign In instead.' 
+            error: 'An account with this email address already exists. Please Sign In instead.' 
           });
         }
       } else if (purpose === 'reset' || purpose === 'forgot-password') {
@@ -177,7 +177,7 @@ async function startServer() {
 
         if (!existingUser) {
           return res.status(404).json({ 
-            error: 'No account was found with this Gmail address.' 
+            error: 'No account was found with this email address.' 
           });
         }
       }
@@ -277,14 +277,24 @@ async function startServer() {
     try {
       const email = sanitizeString(req.body.email).toLowerCase();
       const password = sanitizeString(req.body.password, 64);
-      const name = sanitizeString(req.body.name, 100);
+      const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
 
-      if (!name || !name.trim()) {
+      if (!rawName) {
         return res.status(400).json({ error: 'Full Name is a required field.' });
       }
 
-      if (!email || !isGmailAddress(email)) {
-        return res.status(400).json({ error: 'A valid Gmail address (@gmail.com) is required.' });
+      if (rawName.length > 50) {
+        return res.status(400).json({ error: 'Full Name cannot exceed 50 characters.' });
+      }
+
+      if (/[0-9]/.test(rawName)) {
+        return res.status(400).json({ error: 'Full Name must not contain numbers.' });
+      }
+
+      const name = sanitizeString(rawName, 50);
+
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ error: 'A valid email address is required.' });
       }
 
       // Strict Password Validation
@@ -333,7 +343,7 @@ async function startServer() {
       if (isConnected) {
         const existing = await User.findOne({ email });
         if (existing) {
-          return res.status(400).json({ error: 'An account with this Gmail address already exists. Please Sign In.' });
+          return res.status(400).json({ error: 'An account with this email address already exists. Please Sign In.' });
         }
 
         await User.create({
@@ -350,7 +360,7 @@ async function startServer() {
       } else {
         const existing = memoryStore.users.find(u => u.email === email);
         if (existing) {
-          return res.status(400).json({ error: 'An account with this Gmail address already exists. Please Sign In.' });
+          return res.status(400).json({ error: 'An account with this email address already exists. Please Sign In.' });
         }
 
         memoryStore.users.push({
@@ -403,7 +413,7 @@ async function startServer() {
       const password = sanitizeString(req.body.password, 64);
 
       if (!email || !password) {
-        return res.status(400).json({ error: 'Please enter your Gmail and password.' });
+        return res.status(400).json({ error: 'Please enter your email address and password.' });
       }
 
       const { isConnected } = await getDbStatus();
@@ -417,19 +427,14 @@ async function startServer() {
 
       // Check password (supports hashed passwords as well as legacy plaintext)
       if (!matchedUser || !verifyPassword(password, matchedUser.password)) {
-        return res.status(401).json({ error: 'Invalid Gmail address or password. Please try again.' });
+        return res.status(401).json({ error: 'Invalid email address or password. Please try again.' });
       }
 
-      // Check Account Status (Active / Suspended / Disabled)
+      // Check Account Status (Active / Suspended)
       const userStatus = matchedUser.status || 'Active';
       if (userStatus === 'Suspended') {
         return res.status(403).json({ 
           error: 'Your account is currently suspended. Please contact store management.' 
-        });
-      }
-      if (userStatus === 'Disabled') {
-        return res.status(403).json({ 
-          error: 'Your account has been disabled. Please contact support.' 
         });
       }
 
@@ -507,8 +512,8 @@ async function startServer() {
       const email = sanitizeString(req.body.email).toLowerCase();
       const password = sanitizeString(req.body.password, 64);
 
-      if (!email || !isGmailAddress(email)) {
-        return res.status(400).json({ error: 'A valid Gmail address (@gmail.com) is required.' });
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ error: 'A valid email address is required.' });
       }
 
       // Strict Password Validation: Exact same rules as Sign-Up
@@ -553,7 +558,7 @@ async function startServer() {
       }
 
       if (!existingUser) {
-        return res.status(404).json({ error: 'No account was found with this Gmail address.' });
+        return res.status(404).json({ error: 'No account was found with this email address.' });
       }
 
       // Hash the new password
@@ -671,7 +676,7 @@ async function startServer() {
       const email = sanitizeString(req.body.email).toLowerCase();
       const password = sanitizeString(req.body.password, 64);
       const role = ['admin', 'staff', 'customer'].includes(req.body.role) ? req.body.role : 'staff';
-      const status = ['Active', 'Suspended', 'Disabled'].includes(req.body.status) ? req.body.status : 'Active';
+      const status = ['Active', 'Suspended'].includes(req.body.status) ? req.body.status : 'Active';
 
       if (!name || !email || !password) {
         return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -757,7 +762,7 @@ async function startServer() {
       const { status, role, name } = req.body;
       const { isConnected } = await getDbStatus();
 
-      if (status && !['Active', 'Suspended', 'Disabled'].includes(status)) {
+      if (status && !['Active', 'Suspended'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status value.' });
       }
 
@@ -766,7 +771,11 @@ async function startServer() {
       }
 
       if (isConnected) {
-        const user = await User.findOne({ $or: [{ id }, { _id: id }] });
+        const query = mongoose.Types.ObjectId.isValid(id)
+          ? { $or: [{ id }, { _id: id }] }
+          : { id };
+
+        const user = await User.findOne(query);
         if (!user) {
           return res.status(404).json({ error: 'User account not found.' });
         }

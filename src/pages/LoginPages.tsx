@@ -96,9 +96,9 @@ const LoginPage = () => {
     }
   };
 
-  // Gmail Validator
-  const isGmailValid = (email: string) => {
-    return /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+  // General Email Validator (supports institutional, custom, and standard domains like @sorsu.edu.ph, @gmail.com, etc.)
+  const isValidEmail = (email: string) => {
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/i.test(email.trim());
   };
 
   // Password Rules Validation (Sign Up):
@@ -157,8 +157,8 @@ const LoginPage = () => {
       return;
     }
 
-    if (!isGmailValid(cleanEmail)) {
-      setError('Please enter a valid email address ending in @gmail.com');
+    if (!isValidEmail(cleanEmail)) {
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -320,14 +320,24 @@ const LoginPage = () => {
       return;
     }
 
+    if (cleanName.length > 50) {
+      setError('Full Name cannot exceed 50 characters.');
+      return;
+    }
+
+    if (/[0-9]/.test(cleanName)) {
+      setError('Full Name must not contain numbers.');
+      return;
+    }
+
     const cleanEmail = signUpEmail.trim().toLowerCase();
     if (!cleanEmail) {
       setError('Please enter your email address.');
       return;
     }
 
-    if (!isGmailValid(cleanEmail)) {
-      setError('Please enter a valid email account ending in @gmail.com');
+    if (!isValidEmail(cleanEmail)) {
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -685,7 +695,8 @@ const LoginPage = () => {
                         type="text" 
                         id="signup-name-input"
                         value={signUpName}
-                        onChange={(e) => setSignUpName(e.target.value)}
+                        maxLength={50}
+                        onChange={(e) => setSignUpName(e.target.value.replace(/[0-9]/g, '').slice(0, 50))}
                         placeholder="e.g. Juan Dela Cruz"
                         className="w-full bg-white border border-gray-300 p-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
                         required

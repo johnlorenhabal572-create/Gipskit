@@ -1,8 +1,13 @@
-import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
+import { AuthContext } from './AuthContext';
 
 export const CartContext = createContext<any>(null);
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  const prevUserRef = useRef(user);
+
   const [cart, setCart] = useState(() => {
     const savedCart = localStorage.getItem('capstone_cart');
     return savedCart ? JSON.parse(savedCart) : [];
@@ -15,9 +20,51 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     setTimeout(() => setNotification(null), 3000);
   }, []);
 
+  const clearCart = useCallback(() => {
+    setCart([]);
+    localStorage.removeItem('capstone_cart');
+  }, []);
+
+  // Synchronize cart changes to localStorage
   useEffect(() => {
-    localStorage.setItem('capstone_cart', JSON.stringify(cart));
+    if (cart.length === 0) {
+      localStorage.removeItem('capstone_cart');
+    } else {
+      localStorage.setItem('capstone_cart', JSON.stringify(cart));
+    }
   }, [cart]);
+
+  // Detect authenticated-user -> logged-out transition or user account switch
+  useEffect(() => {
+    const prevUser = prevUserRef.current;
+    const wasAuthenticated = Boolean(prevUser && (prevUser.id || prevUser.email));
+    const isNowLoggedOut = !user;
+    const switchedUser = Boolean(
+      wasAuthenticated && 
+      user && 
+      ((prevUser.id && user.id && prevUser.id !== user.id) || 
+       (prevUser.email && user.email && prevUser.email !== user.email))
+    );
+
+    // Only clear cart when transitioning from authenticated to logged out or switching users.
+    // Do NOT clear cart merely because app initially loads with no authenticated user (preserves guest cart).
+    if ((wasAuthenticated && isNowLoggedOut) || switchedUser) {
+      clearCart();
+    }
+
+    prevUserRef.current = user;
+  }, [user, clearCart]);
+
+  // Handle explicit auth expiration events as an additional defense-in-depth safeguard
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      clearCart();
+    };
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('auth:expired', handleAuthExpired);
+    };
+  }, [clearCart]);
 
   const addToCart = useCallback((product: any) => {
     setCart((prevCart: any[]) => {
@@ -73,8 +120,6 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const removeFromCart = useCallback((productId: string | number) => {
     setCart((prevCart: any[]) => prevCart.filter((item) => item.id !== productId));
   }, []);
-
-  const clearCart = useCallback(() => setCart([]), []);
 
   const getCartTotal = useCallback(() => {
     return cart.reduce((total: number, item: any) => total + item.price * item.quantity, 0);

@@ -11,41 +11,80 @@ const Checkout = () => {
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ 
-    name: user?.name || '', 
+    name: (user?.name || '').replace(/[0-9]/g, '').slice(0, 50), 
     phone: '',
     paymentMethod: 'GCash'
   });
+  const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (user?.name && !formData.name) {
-      setFormData(prev => ({ ...prev, name: user.name }));
+      setFormData(prev => ({ 
+        ...prev, 
+        name: user.name.replace(/[0-9]/g, '').slice(0, 50) 
+      }));
     }
   }, [user]);
 
-  const handleChange = (e: any) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Numbers 0–9 must not be accepted when typing or pasting. Max 50 chars.
+    // Preserves letters, spaces, hyphens, apostrophes, and periods.
+    const filteredName = e.target.value.replace(/[0-9]/g, '').slice(0, 50);
+    setFormData(prev => ({ ...prev, name: filteredName }));
+    if (formError) setFormError('');
   };
 
-  const handleSubmit = async (e: any) => {
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Digits 0–9 only. Max 11 digits while typing or pasting.
+    const filteredPhone = e.target.value.replace(/\D/g, '').slice(0, 11);
+    setFormData(prev => ({ ...prev, phone: filteredPhone }));
+    if (formError) setFormError('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (cart.length === 0) return alert("Your cart is empty!");
     if (isSubmitting) return;
+
+    const cleanName = formData.name.trim();
+    if (!cleanName) {
+      setFormError('Full Name is required.');
+      return;
+    }
+    if (cleanName.length > 50) {
+      setFormError('Full Name cannot exceed 50 characters.');
+      return;
+    }
+    if (/[0-9]/.test(cleanName)) {
+      setFormError('Full Name must not contain numbers.');
+      return;
+    }
+
+    const cleanPhone = formData.phone.trim();
+    if (!cleanPhone) {
+      setFormError('Phone number is required.');
+      return;
+    }
+    if (!/^\d{11}$/.test(cleanPhone)) {
+      setFormError('Phone number must contain exactly 11 digits.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const customerEmail = user?.email?.trim() || '';
-      const customerName = formData.name.trim() || user?.name || 'Customer';
 
       const orderDetails = {
         customer: {
-          name: customerName,
-          phone: formData.phone.trim(),
+          name: cleanName,
+          phone: cleanPhone,
           email: customerEmail,
           paymentMethod: formData.paymentMethod
         },
         userEmail: customerEmail,
-        userName: customerName,
+        userName: cleanName,
         items: [...cart],
         total: getCartTotal(),
         date: new Date().toISOString(),
@@ -64,9 +103,9 @@ const Checkout = () => {
         paymentMethod: 'GCash'
       });
       navigate('/my-bill', { state: { newOrder: savedOrder } }); 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Checkout error:', err);
-      alert('Failed to place order. Please try again.');
+      setFormError(err?.message || 'Failed to place order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -100,6 +139,12 @@ const Checkout = () => {
           Pickup Customer Details
         </h2>
         
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+            {formError}
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Full Name</label>
@@ -108,8 +153,9 @@ const Checkout = () => {
               name="name" 
               value={formData.name}
               placeholder="Enter your full name"
+              maxLength={50}
               required 
-              onChange={handleChange} 
+              onChange={handleNameChange} 
               className="w-full bg-white border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-sm text-dark placeholder:text-gray-400" 
             />
           </div>
@@ -120,9 +166,10 @@ const Checkout = () => {
               type="tel" 
               name="phone" 
               value={formData.phone}
-              placeholder="e.g. 0912 345 6789"
+              placeholder="e.g. 09123456789"
+              maxLength={11}
               required 
-              onChange={handleChange} 
+              onChange={handlePhoneChange} 
               className="w-full bg-white border border-gray-300 px-4 py-2.5 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-sm text-dark placeholder:text-gray-400" 
             />
           </div>

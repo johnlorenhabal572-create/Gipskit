@@ -9,22 +9,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('capstone_user');
     const savedExpiry = localStorage.getItem('capstone_session_expiry');
+    const savedToken = localStorage.getItem('capstone_auth_token');
 
-    if (savedUser && savedExpiry) {
+    // Only restore logged-in user when user, token, and unexpired session all exist
+    if (savedUser && savedExpiry && savedToken && savedToken.trim().length > 0) {
       const expiryTime = Number(savedExpiry);
       if (!isNaN(expiryTime) && Date.now() < expiryTime) {
         try {
           return JSON.parse(savedUser);
         } catch {
-          localStorage.removeItem('capstone_user');
-          localStorage.removeItem('capstone_session_expiry');
-          return null;
+          // JSON parse failed, clean up
         }
       }
     }
 
+    // Clear stale or incomplete authentication storage if token is missing or session expired
     localStorage.removeItem('capstone_user');
     localStorage.removeItem('capstone_session_expiry');
+    localStorage.removeItem('capstone_auth_token');
+    localStorage.removeItem('my_order_ids');
+    clearOrdersCache();
     return null;
   });
 
@@ -115,13 +119,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   }, []);
 
-  // Periodic & event-based check for 24-hour session expiration
+  // Periodic & event-based check for 24-hour session expiration and auth token validity
   useEffect(() => {
     if (!user) return;
 
     const checkExpiration = () => {
       const savedExpiry = localStorage.getItem('capstone_session_expiry');
-      if (!savedExpiry || isNaN(Number(savedExpiry)) || Date.now() >= Number(savedExpiry)) {
+      const savedToken = localStorage.getItem('capstone_auth_token');
+      if (!savedExpiry || isNaN(Number(savedExpiry)) || Date.now() >= Number(savedExpiry) || !savedToken || !savedToken.trim()) {
         logout();
       }
     };
@@ -136,12 +141,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
+    const handleAuthExpired = () => {
+      logout();
+    };
+
     window.addEventListener('focus', checkExpiration);
+    window.addEventListener('auth:expired', handleAuthExpired);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', checkExpiration);
+      window.removeEventListener('auth:expired', handleAuthExpired);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, logout]);
@@ -331,10 +342,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error(data.error || 'Sign up failed');
       }
 
-      if (data.success && data.user) {
-        if (data.token) {
-          localStorage.setItem('capstone_auth_token', data.token);
-        }
+      if (data.success && data.user && data.token) {
+        localStorage.setItem('capstone_auth_token', data.token);
         const expiry = Date.now() + SESSION_DURATION_MS;
         localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);
@@ -347,13 +356,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
         return data.user;
       }
-      throw new Error('Could not complete registration');
+      throw new Error('Could not complete registration: No authorization token received');
     } catch (err: any) {
       throw new Error(err.message || 'Registration error');
     }
   }, [accounts]);
 
-  // Unified Sign In (Customers & Admins)
+  // Unified Sign In (Customers & Admins) - strictly server-authenticated
   const login = useCallback(async (email: string, password: string) => {
     try {
       const cleanEmail = email.trim().toLowerCase();
@@ -368,48 +377,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = null;
 
-      if (!res.ok) {
-        // Offline / Client fallback if server API is unreachable or in local preview
-        const localFound = accounts.find(
-          acc => acc.email.toLowerCase() === cleanEmail && acc.password === cleanPassword
-        );
-        if (localFound) {
-          const { password: _, ...cleanUser } = localFound;
-          const expiry = Date.now() + SESSION_DURATION_MS;
-          localStorage.setItem('capstone_session_expiry', expiry.toString());
-          setUser(cleanUser);
-          return cleanUser;
+      if (contentType.includes('application/json')) {
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
         }
-        throw new Error(data.error || 'Invalid credentials');
       }
 
-      if (data.success && data.user) {
-        if (data.token) {
-          localStorage.setItem('capstone_auth_token', data.token);
+      if (!res.ok) {
+        if (data && data.error) {
+          throw new Error(data.error);
         }
+        if (res.status === 403) {
+          throw new Error('Your account is currently suspended. Please contact store management.');
+        }
+        throw new Error('Invalid email address or password');
+      }
+
+      if (!data) {
+        throw new Error('Unable to connect to service. Please try again.');
+      }
+
+      if (data.success && data.user && data.token) {
+        localStorage.setItem('capstone_auth_token', data.token);
         const expiry = Date.now() + SESSION_DURATION_MS;
         localStorage.setItem('capstone_session_expiry', expiry.toString());
         setUser(data.user);
         return data.user;
       }
-      throw new Error('Sign in failed');
+      throw new Error('Sign in failed: No authorization token received from server');
     } catch (err: any) {
-      // Local fallback check
-      const localFound = accounts.find(
-        acc => acc.email.toLowerCase() === email.trim().toLowerCase() && acc.password === password.trim()
-      );
-      if (localFound) {
-        const { password: _, ...cleanUser } = localFound;
-        const expiry = Date.now() + SESSION_DURATION_MS;
-        localStorage.setItem('capstone_session_expiry', expiry.toString());
-        setUser(cleanUser);
-        return cleanUser;
-      }
       throw new Error(err.message || 'Invalid email address or password');
     }
-  }, [accounts]);
+  }, []);
 
   const addAccount = useCallback(async (newAcc: any) => {
     try {
@@ -461,8 +465,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setAccounts(prev => prev.map(acc => (acc.id === id || acc._id === id) ? { ...acc, ...updatedData } : acc));
   }, []);
 
-  // Update Status: Active, Suspended, or Disabled (Preserves records & order history)
-  const updateUserStatus = useCallback(async (id: string, status: 'Active' | 'Suspended' | 'Disabled') => {
+  // Update Status: Active or Suspended (Preserves records & order history)
+  const updateUserStatus = useCallback(async (id: string, status: 'Active' | 'Suspended') => {
     return updateAccount(id, { status });
   }, [updateAccount]);
 
@@ -470,11 +474,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const updateUserRole = useCallback(async (id: string, role: 'customer' | 'staff' | 'admin') => {
     return updateAccount(id, { role });
   }, [updateAccount]);
-
-  // Disable account instead of permanent deletion to preserve all historical orders & receipts
-  const disableAccount = useCallback((id: string) => {
-    updateUserStatus(id, 'Disabled');
-  }, [updateUserStatus]);
 
   const value = useMemo(() => ({
     user, 
@@ -493,8 +492,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     addAccount, 
     updateAccount, 
     updateUserStatus,
-    updateUserRole,
-    disableAccount
+    updateUserRole
   }), [
     user, 
     login, 
@@ -512,8 +510,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     addAccount, 
     updateAccount, 
     updateUserStatus,
-    updateUserRole,
-    disableAccount
+    updateUserRole
   ]);
 
   return (

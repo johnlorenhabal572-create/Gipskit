@@ -329,10 +329,11 @@ export const CustomerDashboard = () => {
     };
   }, [user?.email]);
 
-  // Filter active customer orders (every order whose status is NOT Completed or Cancelled)
+  // Filter active customer orders (only Paid, Processing, Cooking, Ready for Pickup / Ready to Pickup)
   const activeOrders = useMemo(() => {
+    const activeStatuses = ['Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup'];
     return customerOrders.filter(
-      (o) => o.status !== 'Completed' && o.status !== 'Cancelled'
+      (o) => activeStatuses.includes(o.status)
     );
   }, [customerOrders]);
 

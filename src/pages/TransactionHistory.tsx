@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
+import { useConfirm } from '../context/ConfirmContext';
 import { AnimatePresence } from 'motion/react';
 import { X, Receipt as ReceiptIcon, Search } from 'lucide-react';
 import { formatPrice } from '../utils/format';
@@ -11,10 +12,11 @@ const TransactionHistory = () => {
   const [filterStatus, setFilterStatus] = useState('Completed');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const confirm = useConfirm();
 
   const loadOrders = async () => {
     try {
-      const data = await fetchOrders();
+      const data = await fetchOrders({ scope: 'history' });
       setMyOrders(data || []);
     } catch (err) {
       console.error('Failed to load transaction history:', err);
@@ -26,22 +28,35 @@ const TransactionHistory = () => {
   }, []);
 
   const handleDelete = async (orderId: string) => {
-    if (window.confirm('Are you sure you want to delete this transaction from record?')) {
-      setMyOrders(prev => prev.filter(o => o.id !== orderId));
-      await removeOrder(orderId);
-      await loadOrders();
-    }
+    const confirmed = await confirm({
+      title: 'Delete Transaction?',
+      message: 'Are you sure you want to delete this transaction from record?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'destructive'
+    });
+    if (!confirmed) return;
+
+    setMyOrders(prev => prev.filter(o => o.id !== orderId));
+    await removeOrder(orderId);
+    await loadOrders();
   };
 
   // Apply Search and Filter logic
   const filteredOrders = myOrders.filter(order => {
+    // Transaction History strictly allows only Completed or admin/staff-declined orders
+    const isHistoryEligible = 
+      order.status === 'Completed' || 
+      (order.status === 'Cancelled' && (order.cancelledBy === 'admin' || order.cancelledBy === 'staff'));
+
+    if (!isHistoryEligible) return false;
+
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
       order.id.toLowerCase().includes(searchLower) || 
-      order.customer.name.toLowerCase().includes(searchLower);
-    const matchesStatus = filterStatus === 'All' 
-      || order.status === filterStatus
-      || (filterStatus === 'Ready for Pickup' && order.status === 'Ready to Pickup');
+      (order.customer?.name && order.customer.name.toLowerCase().includes(searchLower));
+
+    const matchesStatus = filterStatus === 'All' || order.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -66,15 +81,9 @@ const TransactionHistory = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="bg-gray-50 border border-gray-300 px-3 py-2 rounded-lg text-xs font-bold text-dark focus:outline-none focus:border-dark"
           >
-            <option value="All">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="Paid">Paid</option>
-            <option value="Processing">Processing</option>
-            <option value="Cooking">Cooking</option>
-            <option value="Ready for Pickup">Ready for Pickup</option>
-            <option value="On Delivery">On Delivery</option>
+            <option value="All">All Transactions</option>
             <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
+            <option value="Cancelled">Cancelled (Admin Declined)</option>
           </select>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { fetchOrders, removeOrder } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { Search, Clock, X, Utensils } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
@@ -13,6 +14,7 @@ const CustomerOrderHistory = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const { user } = useContext(AuthContext) as any;
   const { markCustomerOrdersRead } = useNotifications();
+  const confirm = useConfirm();
   const hasMarkedReadRef = useRef(false);
   const isFetchingRef = useRef(false);
 
@@ -71,11 +73,18 @@ const CustomerOrderHistory = () => {
   }, [user]);
 
   const handleDelete = async (orderId: string) => {
-    if (window.confirm('Are you sure you want to delete this order from your history?')) {
-      setMyOrders(prev => prev.filter(o => o.id !== orderId));
-      await removeOrder(orderId);
-      await loadOrders();
-    }
+    const confirmed = await confirm({
+      title: 'Delete Order?',
+      message: 'Are you sure you want to delete this order from your history?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'destructive'
+    });
+    if (!confirmed) return;
+
+    setMyOrders(prev => prev.filter(o => o.id !== orderId));
+    await removeOrder(orderId);
+    await loadOrders();
   };
 
   const filteredOrders = myOrders.filter(order => 

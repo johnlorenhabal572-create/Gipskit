@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchProducts, createProduct, editProduct, removeProduct, fetchCategories, createCategory, deleteCategory, CATEGORIES, calculateAvailableServings } from '../api/productService';
 import { fetchInventory, getInventory } from '../api/inventoryService';
+import { useConfirm } from '../context/ConfirmContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Edit2, X, Link as LinkIcon, Image as ImageIcon, Upload, Loader2, Tag, FolderPlus, FolderMinus, Search, Utensils, MoreVertical } from 'lucide-react';
 import { IMAGES } from '../constants/images';
@@ -14,6 +15,7 @@ const ManageMenu = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const confirm = useConfirm();
 
   // Mobile Action Menu (⋮) state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -102,7 +104,15 @@ const ManageMenu = () => {
       ? `Are you sure you want to remove the category "${target}"? ${itemsInCat} menu item(s) in this category will not be deleted and will be safely reassigned to "Uncategorized".`
       : `Are you sure you want to remove the category "${target}"?`;
 
-    if (!window.confirm(confirmMessage)) {
+    const confirmed = await confirm({
+      title: 'Remove Category?',
+      message: confirmMessage,
+      confirmText: 'Remove Category',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -192,13 +202,20 @@ const ManageMenu = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this menu item?')) {
-      try {
-        await removeProduct(id);
-        setProducts(prev => prev.filter(p => p.id !== id));
-      } catch (err: any) {
-        alert(err.message || 'Failed to delete product');
-      }
+    const confirmed = await confirm({
+      title: 'Delete Menu Item?',
+      message: 'Are you sure you want to delete this menu item?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'destructive'
+    });
+    if (!confirmed) return;
+
+    try {
+      await removeProduct(id);
+      setProducts(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete product');
     }
   };
 

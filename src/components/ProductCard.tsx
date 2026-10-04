@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { formatPrice } from '../utils/format';
 
 const ProductCard = ({ product }: { product: any }) => {
-  const { addToCart } = useContext(CartContext) as any;
+  const { addToCart, showNotification } = useContext(CartContext) as any;
   const { user } = useContext(AuthContext) as any;
   const navigate = useNavigate();
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -29,6 +29,7 @@ const ProductCard = ({ product }: { product: any }) => {
 
   const handleAddToCart = (qty = 1) => {
     if (!user) {
+      showNotification('Please sign in or create an account to add items to your cart.');
       navigate('/login', { state: { from: { pathname: '/menu' } } });
       return;
     }

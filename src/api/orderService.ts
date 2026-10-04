@@ -34,8 +34,20 @@ export function clearOrdersCache() {
   isCacheLoaded = false;
 }
 
+// Centralized handler when server returns HTTP 401 Unauthorized
+export function handleSessionExpired(): void {
+  clearOrdersCache();
+  localStorage.removeItem('capstone_auth_token');
+  localStorage.removeItem('capstone_user');
+  localStorage.removeItem('capstone_session_expiry');
+  localStorage.removeItem('my_order_ids');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:expired'));
+  }
+}
+
 // 1. Fetch orders from MongoDB backend
-export async function fetchOrders(filters?: { status?: string; email?: string; orderType?: string; search?: string; orderIds?: string[] }): Promise<any[]> {
+export async function fetchOrders(filters?: { status?: string; email?: string; orderType?: string; search?: string; orderIds?: string[]; scope?: string }): Promise<any[]> {
   // Determine current active user email
   let currentEmail = '';
   try {
@@ -55,6 +67,7 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
 
   try {
     const params = new URLSearchParams();
+    if (filters?.scope) params.append('scope', filters.scope);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.email) params.append('email', filters.email);
     if (filters?.orderType) params.append('orderType', filters.orderType);
@@ -67,6 +80,11 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
     const res = await fetch(`/api/orders${queryString}`, {
       headers: getAuthHeaders()
     });
+
+    if (res.status === 401) {
+      handleSessionExpired();
+      throw new Error(`Failed to fetch orders (401)`);
+    }
 
     if (!res.ok) {
       throw new Error(`Failed to fetch orders (${res.status})`);
@@ -81,10 +99,29 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
     isCacheLoaded = true;
 
     return result;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes('401')) {
+      // Do not treat user as authenticated or use cached orders on authentication failure
+      return [];
+    }
     console.warn('Backend orders fetch failed, using cached state:', error);
     if (cacheOwnerEmail !== currentEmail) {
       return [];
+    }
+    if (filters?.scope === 'manage') {
+      const manageStatuses = ['Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup'];
+      let res = ordersCache.filter(o => manageStatuses.includes(o.status));
+      if (filters?.status && filters.status !== 'All') {
+        res = res.filter(o => o.status === filters.status);
+      }
+      return res;
+    }
+    if (filters?.scope === 'history') {
+      let res = ordersCache.filter(o => o.status === 'Completed' || (o.status === 'Cancelled' && (o.cancelledBy === 'admin' || o.cancelledBy === 'staff')));
+      if (filters?.status && filters.status !== 'All') {
+        res = res.filter(o => o.status === filters.status);
+      }
+      return res;
     }
     if (filters?.status) {
       return ordersCache.filter(o => o.status === filters.status);
@@ -141,6 +178,11 @@ export async function modifyOrderStatus(orderId: string, status: string): Promis
       body: JSON.stringify({ status })
     });
 
+    if (res.status === 401) {
+      handleSessionExpired();
+      throw new Error('Unauthorized: Session expired (401)');
+    }
+
     if (!res.ok) {
       throw new Error('Failed to update order status');
     }
@@ -166,6 +208,11 @@ export async function modifyOrderPayment(orderId: string, paymentData: any): Pro
       body: JSON.stringify(paymentData)
     });
 
+    if (res.status === 401) {
+      handleSessionExpired();
+      throw new Error('Unauthorized: Session expired (401)');
+    }
+
     if (!res.ok) {
       throw new Error('Failed to update order payment');
     }
@@ -189,6 +236,11 @@ export async function removeOrder(orderId: string): Promise<boolean> {
       headers: getAuthHeaders()
     });
 
+    if (res.status === 401) {
+      handleSessionExpired();
+      return false;
+    }
+
     return res.ok;
   } catch (error) {
     console.error('Error deleting order from MongoDB:', error);
@@ -207,6 +259,11 @@ export async function fetchSalesSummary(period: 'day' | 'week' | 'month' | 'year
       headers: getAuthHeaders()
     });
 
+    if (res.status === 401) {
+      handleSessionExpired();
+      return null;
+    }
+
     if (!res.ok) throw new Error('Failed to fetch sales summary');
     return await res.json();
   } catch (error) {
@@ -221,6 +278,11 @@ export async function fetchProductAnalysis(): Promise<any> {
     const res = await fetch('/api/orders/stats/product-analysis', {
       headers: getAuthHeaders()
     });
+
+    if (res.status === 401) {
+      handleSessionExpired();
+      return null;
+    }
 
     if (!res.ok) throw new Error('Failed to fetch product analysis');
     return await res.json();

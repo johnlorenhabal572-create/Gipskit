@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { useNotifications } from '../context/NotificationContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { X, Eye, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatPrice } from '../utils/format';
@@ -14,6 +15,7 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [updatingOrders, setUpdatingOrders] = useState<Record<string, string>>({});
   const { markAdminOrdersAsRead } = useNotifications();
+  const confirm = useConfirm();
   const hasMarkedReadRef = useRef(false);
   const isFetchingRef = useRef(false);
 
@@ -21,7 +23,7 @@ const AdminDashboard = () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
-      const data = await fetchOrders();
+      const data = await fetchOrders({ scope: 'manage' });
       const orderList = data || [];
       setOrders(orderList);
 
@@ -95,7 +97,14 @@ const AdminDashboard = () => {
   const handleCancelPendingOrder = async (orderId: string) => {
     if (updatingOrders[orderId]) return;
 
-    if (!window.confirm(`Are you sure you want to cancel order ${orderId}?`)) {
+    const confirmed = await confirm({
+      title: 'Cancel Order?',
+      message: `Are you sure you want to cancel order ${orderId}?`,
+      confirmText: 'Cancel Order',
+      cancelText: 'Keep Order',
+      variant: 'destructive'
+    });
+    if (!confirmed) {
       return;
     }
     setUpdatingOrders(prev => ({ ...prev, [orderId]: 'Cancelled' }));
@@ -128,17 +137,26 @@ const AdminDashboard = () => {
       (customerEmail && customerEmail.toLowerCase().includes(searchLower)) ||
       (order.customer?.phone && order.customer.phone.toLowerCase().includes(searchLower));
       
-    const matchesStatus = filterStatus === 'All' 
-      || order.status === filterStatus
-      || (filterStatus === 'Ready for Pickup' && order.status === 'Ready to Pickup');
+    let matchesStatus = false;
+    if (filterStatus === 'Pending') {
+      matchesStatus = order.status === 'Paid';
+    } else if (filterStatus === 'Processing') {
+      matchesStatus = order.status === 'Processing';
+    } else if (filterStatus === 'Cooking') {
+      matchesStatus = order.status === 'Cooking';
+    } else if (filterStatus === 'Ready for Pickup') {
+      matchesStatus = order.status === 'Ready for Pickup' || order.status === 'Ready to Pickup';
+    } else if (filterStatus === 'All') {
+      matchesStatus = ['Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Ready to Pickup'].includes(order.status);
+    }
     
     return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'Pending': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-      case 'Paid': return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'Pending':
+      case 'Paid': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
       case 'Processing': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
       case 'Cooking': return 'bg-orange-50 text-orange-800 border-orange-200';
       case 'Ready for Pickup':
@@ -165,7 +183,7 @@ const AdminDashboard = () => {
     <div className="min-h-screen py-8 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-wrap gap-1.5 w-full mb-6">
-          {['Pending', 'Paid', 'Processing', 'Cooking', 'Ready for Pickup', 'Completed', 'Cancelled', 'All'].map(status => (
+          {['Pending', 'Processing', 'Cooking', 'Ready for Pickup', 'All'].map(status => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
@@ -218,7 +236,7 @@ const AdminDashboard = () => {
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="text-lg font-black text-dark tracking-tight">{order.customer?.name || 'Customer'}</h3>
                         <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
-                          {order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status)}
+                          {order.status === 'Paid' ? 'Pending' : (order.status === 'Cooking' ? 'Cooking 🍳' : (order.status === 'Ready to Pickup' ? 'Ready for Pickup' : order.status))}
                         </span>
                       </div>
                       
@@ -401,8 +419,15 @@ const AdminDashboard = () => {
                         <button 
                           id={`btn-decline-order-${order.id}`}
                           disabled={Boolean(updatingOrders[order.id])}
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to decline and cancel order ${order.id}?`)) {
+                          onClick={async () => {
+                            const confirmed = await confirm({
+                              title: 'Decline Transaction?',
+                              message: `Are you sure you want to decline and cancel order ${order.id}?`,
+                              confirmText: 'Decline & Cancel',
+                              cancelText: 'Keep Order',
+                              variant: 'destructive'
+                            });
+                            if (confirmed) {
                               handleStatusChange(order.id, 'Cancelled');
                             }
                           }}

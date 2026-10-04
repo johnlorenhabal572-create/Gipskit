@@ -8,6 +8,7 @@ import {
   fetchInventoryLogs 
 } from '../api/inventoryService';
 import { useNotifications } from '../context/NotificationContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -48,6 +49,7 @@ const formatDisplayQuantity = (val: string | number | undefined | null): string 
 const ManageInventory = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<'inventory' | 'logs'>('inventory');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -189,14 +191,21 @@ const ManageInventory = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this inventory item? This will be recorded in audit logs.')) {
-      try {
-        await deleteInventoryItem(id);
-        setInventory(prev => prev.filter(item => item.id !== id));
-        fetchInventoryLogs(undefined, 100).then(setLogs).catch(console.error);
-      } catch (err: any) {
-        alert(err.message || 'Failed to delete inventory item');
-      }
+    const confirmed = await confirm({
+      title: 'Delete Inventory Item?',
+      message: 'Are you sure you want to delete this inventory item? This will be recorded in audit logs.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'destructive'
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteInventoryItem(id);
+      setInventory(prev => prev.filter(item => item.id !== id));
+      fetchInventoryLogs(undefined, 100).then(setLogs).catch(console.error);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete inventory item');
     }
   };
 

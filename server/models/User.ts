@@ -13,7 +13,7 @@ export interface IUser extends Document {
   email: string;
   password?: string;
   role: 'customer' | 'admin' | 'staff';
-  status: 'Active' | 'Suspended' | 'Disabled';
+  status: 'Active' | 'Suspended';
   createdAt: Date;
   lastLogin: Date;
   loginHistory?: ILoginRecord[];
@@ -33,7 +33,7 @@ const UserSchema: Schema<IUser> = new Schema(
     },
     status: {
       type: String,
-      enum: ['Active', 'Suspended', 'Disabled'],
+      enum: ['Active', 'Suspended'],
       default: 'Active',
       index: true
     },

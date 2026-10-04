@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext'; // 1. Import AuthProvider
 import { NotificationProvider } from './context/NotificationContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import Navbar from './components/NavBar';
 import LandingPage from './pages/LandingPage';
 import Catalog from './pages/Catalog';
@@ -27,7 +28,8 @@ function App() {
     <AuthProvider>
       <NotificationProvider>
         <CartProvider>
-          <Router>
+          <ConfirmProvider>
+            <Router>
             <div className="min-h-screen bg-white flex flex-col text-dark">
               <Navbar />
               <main className="flex-1">
@@ -132,6 +134,7 @@ function App() {
             </main>
           </div>
         </Router>
+          </ConfirmProvider>
       </CartProvider>
       </NotificationProvider>
     </AuthProvider>
