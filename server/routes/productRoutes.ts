@@ -240,7 +240,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         query = { _id: rawId };
       }
 
-      const updated = await Product.findOneAndUpdate(query, { $set: updates }, { new: true, runValidators: true }).lean();
+      const updated = await Product.findOneAndUpdate(query, { $set: updates }, { returnDocument: 'after', runValidators: true }).lean();
       if (!updated) {
         return res.status(404).json({ error: `Product with ID ${rawId} not found` });
       }
