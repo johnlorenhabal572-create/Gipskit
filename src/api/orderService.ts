@@ -65,6 +65,9 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
     cacheOwnerEmail = currentEmail;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
   try {
     const params = new URLSearchParams();
     if (filters?.scope) params.append('scope', filters.scope);
@@ -78,7 +81,8 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const res = await fetch(`/api/orders${queryString}`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      signal: controller.signal
     });
 
     if (res.status === 401) {
@@ -127,6 +131,8 @@ export async function fetchOrders(filters?: { status?: string; email?: string; o
       return ordersCache.filter(o => o.status === filters.status);
     }
     return ordersCache;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

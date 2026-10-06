@@ -389,6 +389,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (!res.ok) {
+        if (res.status === 429 || data?.isLocked) {
+          const lockErr: any = new Error(
+            data?.error || 'Too many failed sign-in attempts. Your sign-in is temporarily locked for security.'
+          );
+          lockErr.isLocked = true;
+          lockErr.remainingSeconds = typeof data?.remainingSeconds === 'number' ? data.remainingSeconds : 600;
+          lockErr.lockoutUntil = data?.lockoutUntil || null;
+          lockErr.status = 429;
+          throw lockErr;
+        }
         if (data && data.error) {
           throw new Error(data.error);
         }
@@ -411,6 +421,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       throw new Error('Sign in failed: No authorization token received from server');
     } catch (err: any) {
+      if (err.isLocked || err.status === 429) {
+        throw err;
+      }
       throw new Error(err.message || 'Invalid email address or password');
     }
   }, []);

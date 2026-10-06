@@ -1,6 +1,7 @@
 import { useState, useContext, useMemo, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { AnimatePresence, motion } from 'motion/react';
+import { CustomSelect } from '../components/CustomSelect';
 import { 
   Plus, 
   Search, 
@@ -264,33 +265,31 @@ export const AccountManagement = () => {
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Role Filter */}
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Role:</span>
-              <select 
-                value={roleFilter}
-                onChange={(e: any) => setRoleFilter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-dark focus:outline-none cursor-pointer"
-              >
-                <option value="all">All Roles</option>
-                <option value="customer">Customer</option>
-                <option value="staff">Staff</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
+            <CustomSelect 
+              labelPrefix="Role:"
+              value={roleFilter}
+              onChange={(val: any) => setRoleFilter(val)}
+              options={[
+                { value: 'all', label: 'All Roles' },
+                { value: 'customer', label: 'Customer' },
+                { value: 'staff', label: 'Staff' },
+                { value: 'admin', label: 'Administrator' }
+              ]}
+              triggerClassName="bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-dark hover:border-dark focus:outline-none cursor-pointer"
+            />
 
             {/* Status Filter */}
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status:</span>
-              <select 
-                value={statusFilter}
-                onChange={(e: any) => setStatusFilter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-dark focus:outline-none cursor-pointer"
-              >
-                <option value="all">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Suspended">Suspended</option>
-              </select>
-            </div>
+            <CustomSelect 
+              labelPrefix="Status:"
+              value={statusFilter}
+              onChange={(val: any) => setStatusFilter(val)}
+              options={[
+                { value: 'all', label: 'All Statuses' },
+                { value: 'Active', label: 'Active' },
+                { value: 'Suspended', label: 'Suspended' }
+              ]}
+              triggerClassName="bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-dark hover:border-dark focus:outline-none cursor-pointer"
+            />
 
             {(searchTerm || roleFilter !== 'all' || statusFilter !== 'all') && (
               <button 
@@ -639,27 +638,31 @@ export const AccountManagement = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Account Role</label>
-                      <select 
+                      <CustomSelect 
                         value={formData.role}
-                        onChange={(e) => setFormData({...formData, role: e.target.value})}
-                        className="w-full p-2 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark"
-                      >
-                        <option value="staff">Staff Member</option>
-                        <option value="admin">Administrator</option>
-                        <option value="customer">Customer</option>
-                      </select>
+                        onChange={(val) => setFormData({...formData, role: val})}
+                        options={[
+                          { value: 'staff', label: 'Staff Member' },
+                          { value: 'admin', label: 'Administrator' },
+                          { value: 'customer', label: 'Customer' }
+                        ]}
+                        className="w-full"
+                        triggerClassName="w-full p-2 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark cursor-pointer"
+                      />
                     </div>
 
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Initial Status</label>
-                      <select 
+                      <CustomSelect 
                         value={formData.status}
-                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                        className="w-full p-2 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Suspended">Suspended</option>
-                      </select>
+                        onChange={(val) => setFormData({...formData, status: val})}
+                        options={[
+                          { value: 'Active', label: 'Active' },
+                          { value: 'Suspended', label: 'Suspended' }
+                        ]}
+                        className="w-full"
+                        triggerClassName="w-full p-2 rounded-lg bg-white border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark cursor-pointer"
+                      />
                     </div>
                   </div>
 

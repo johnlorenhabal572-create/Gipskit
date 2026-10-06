@@ -10,6 +10,7 @@ import {
 import { useNotifications } from '../context/NotificationContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { CustomSelect } from '../components/CustomSelect';
 import { 
   Plus, 
   Trash2, 
@@ -389,21 +390,18 @@ const ManageInventory = () => {
               </div>
 
               {/* Compact Quantity Sorting Control */}
-              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-300 shrink-0">
-                <label htmlFor="inventory-quantity-sort" className="text-xs font-bold text-gray-600 whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-                  <ArrowUpDown size={14} className="text-gray-400" />
-                  <span>Sort: Quantity</span>
-                </label>
-                <select
-                  id="inventory-quantity-sort"
-                  value={quantitySort}
-                  onChange={(e) => setQuantitySort(e.target.value as 'high-to-low' | 'low-to-high')}
-                  className="bg-transparent text-xs font-bold text-dark focus:outline-none cursor-pointer py-1 pr-1 border-0"
-                >
-                  <option value="high-to-low">High → Low</option>
-                  <option value="low-to-high">Low → High</option>
-                </select>
-              </div>
+              <CustomSelect
+                id="inventory-quantity-sort"
+                icon={<ArrowUpDown size={14} className="text-gray-400" />}
+                labelPrefix="Sort: Quantity"
+                value={quantitySort}
+                onChange={(val) => setQuantitySort(val as 'high-to-low' | 'low-to-high')}
+                options={[
+                  { value: 'high-to-low', label: 'High → Low' },
+                  { value: 'low-to-high', label: 'Low → High' }
+                ]}
+                triggerClassName="bg-white px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-bold text-dark hover:border-dark focus:outline-none cursor-pointer shrink-0"
+              />
             </div>
 
             {/* Desktop Table */}
@@ -469,15 +467,13 @@ const ManageInventory = () => {
                           />
                         </td>
                         <td className="p-3">
-                          <select 
+                          <CustomSelect 
                             value={newItem.unit}
-                            onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
-                            className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark"
-                          >
-                            {UNIT_OPTIONS.map(unit => (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ))}
-                          </select>
+                            onChange={(val) => setNewItem({...newItem, unit: val})}
+                            options={UNIT_OPTIONS.map(unit => ({ value: unit, label: unit }))}
+                            className="w-full"
+                            triggerClassName="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark cursor-pointer"
+                          />
                         </td>
                         <td className="p-3 text-center text-xs text-gray-400 font-medium">Initial Entry</td>
                         <td className="p-3 text-right">
@@ -572,15 +568,13 @@ const ManageInventory = () => {
                         </td>
                         <td className="p-4">
                           {editingId === item.id ? (
-                            <select 
+                            <CustomSelect 
                               value={editItem.unit}
-                              onChange={(e) => setEditItem({...editItem, unit: e.target.value})}
-                              className="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark"
-                            >
-                              {UNIT_OPTIONS.map(unit => (
-                                <option key={unit} value={unit}>{unit}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setEditItem({...editItem, unit: val})}
+                              options={UNIT_OPTIONS.map(unit => ({ value: unit, label: unit }))}
+                              className="w-full"
+                              triggerClassName="w-full px-3 py-1.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark cursor-pointer"
+                            />
                           ) : (
                             <span className="text-gray-600 text-xs font-bold uppercase">{item.unit}</span>
                           )}
@@ -687,15 +681,13 @@ const ManageInventory = () => {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Unit</label>
-                      <select 
+                      <CustomSelect 
                         value={newItem.unit}
-                        onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
-                        className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-xs bg-white font-semibold text-dark"
-                      >
-                        {UNIT_OPTIONS.map(unit => (
-                          <option key={unit} value={unit}>{unit}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setNewItem({...newItem, unit: val})}
+                        options={UNIT_OPTIONS.map(unit => ({ value: unit, label: unit }))}
+                        className="w-full"
+                        triggerClassName="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-xs bg-white font-semibold text-dark cursor-pointer"
+                      />
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button onClick={handleAdd} className="flex-1 bg-dark text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors">Add Item</button>
@@ -747,15 +739,13 @@ const ManageInventory = () => {
                             className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-dark"
                           />
                         </div>
-                        <select 
+                        <CustomSelect 
                           value={editItem.unit}
-                          onChange={(e) => setEditItem({...editItem, unit: e.target.value})}
-                          className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-xs bg-white font-semibold text-dark"
-                        >
-                          {UNIT_OPTIONS.map(unit => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => setEditItem({...editItem, unit: val})}
+                          options={UNIT_OPTIONS.map(unit => ({ value: unit, label: unit }))}
+                          className="w-full"
+                          triggerClassName="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-xs bg-white font-semibold text-dark cursor-pointer"
+                        />
                         <div className="flex gap-2">
                           <button onClick={handleSaveEdit} className="flex-1 bg-dark text-white py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-primary transition-colors">Save</button>
                           <button onClick={() => setEditingId(null)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-100 transition-colors">Cancel</button>

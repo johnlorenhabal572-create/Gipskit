@@ -17,6 +17,8 @@ export interface IUser extends Document {
   createdAt: Date;
   lastLogin: Date;
   loginHistory?: ILoginRecord[];
+  failedLoginAttempts?: number;
+  lockoutUntil?: Date | null;
 }
 
 const UserSchema: Schema<IUser> = new Schema(
@@ -39,6 +41,8 @@ const UserSchema: Schema<IUser> = new Schema(
     },
     createdAt: { type: Date, default: Date.now },
     lastLogin: { type: Date, default: Date.now },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockoutUntil: { type: Date, default: null },
     loginHistory: [
       {
         timestamp: { type: Date, default: Date.now },

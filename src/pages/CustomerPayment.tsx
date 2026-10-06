@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchOrders, modifyOrderStatus } from '../api/orderService';
 import { CreditCard, CheckCircle2, Eye, User, Phone, MapPin, Facebook, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
@@ -9,8 +9,11 @@ const CustomerPayment = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
 
   const loadOrders = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const allOrders = await fetchOrders();
       const paymentOrders = allOrders.filter(order => 
@@ -19,13 +22,32 @@ const CustomerPayment = () => {
       setOrders(paymentOrders);
     } catch (err) {
       console.error('Failed to load customer payment orders:', err);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(loadOrders, 5000);
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        loadOrders();
+      }
+    }, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const handleConfirmPayment = async (orderId: string) => {

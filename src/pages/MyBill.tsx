@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { fetchOrders, modifyOrderPayment, modifyOrderStatus } from '../api/orderService';
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
@@ -20,12 +20,15 @@ const MyBill = () => {
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<{ [key: string]: string }>({});
   const [loadingInitial, setLoadingInitial] = useState<boolean>(!newOrderFromNav);
+  const isFetchingRef = useRef(false);
   const { user } = useContext(AuthContext) as any;
   const { showNotification } = useContext(CartContext) as any;
   const confirm = useConfirm();
   const navigate = useNavigate();
 
   const loadBills = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       if (!user?.email) {
         setBills([]);
@@ -40,14 +43,32 @@ const MyBill = () => {
     } catch (err) {
       console.error('Failed to load bills:', err);
     } finally {
+      isFetchingRef.current = false;
       setLoadingInitial(false);
     }
   };
 
   useEffect(() => {
     loadBills();
-    const interval = setInterval(loadBills, 4000); // Poll for updates
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        loadBills();
+      }
+    }, 4000); // Poll for updates while visible
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadBills();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user]);
 
 // Helper to compress and resize receipt images using browser Canvas API

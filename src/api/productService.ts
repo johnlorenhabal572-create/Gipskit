@@ -125,90 +125,131 @@ export const getAuthHeaders = (): Record<string, string> => {
   return { 'Content-Type': 'application/json' };
 };
 
-// In-memory runtime cache (no localStorage dependency for permanent storage)
+// In-memory runtime cache with 10-second TTL
 let cachedProducts: any[] = [];
 let isCacheLoaded = false;
+let cacheTimestamp = 0;
+const PRODUCT_CACHE_TTL_MS = 10000; // 10 seconds
+let pendingProductsPromise: Promise<any[]> | null = null;
+
+export const invalidateProductCache = () => {
+  cacheTimestamp = 0;
+};
 
 // Async API: Fetch all products from MongoDB Atlas via REST API
-export const fetchProducts = async (filters?: { category?: string; search?: string; availableOnly?: boolean }): Promise<any[]> => {
-  try {
-    const params = new URLSearchParams();
-    if (filters?.category && filters.category !== 'All') params.append('category', filters.category);
-    if (filters?.search) params.append('search', filters.search);
-    if (filters?.availableOnly) params.append('availableOnly', 'true');
+export const fetchProducts = async (filters?: { category?: string; search?: string; availableOnly?: boolean; forceRefresh?: boolean }): Promise<any[]> => {
+  const hasFilters = Boolean(
+    (filters?.category && filters.category !== 'All') ||
+    filters?.search ||
+    filters?.availableOnly
+  );
+  const isForceRefresh = Boolean(filters?.forceRefresh);
 
-    const url = `/api/products${params.toString() ? `?${params.toString()}` : ''}`;
-
-    // Concurrently fetch products and ensure inventory is fully loaded from backend
-    const [productsResult, inventoryResult] = await Promise.allSettled([
-      fetch(url, { headers: getAuthHeaders() }),
-      fetchInventory()
-    ]);
-
-    if (productsResult.status !== 'fulfilled' || !productsResult.value.ok) {
-      const errorData = productsResult.status === 'fulfilled'
-        ? await productsResult.value.json().catch(() => ({}))
-        : {};
-      const status = productsResult.status === 'fulfilled' ? productsResult.value.status : 'Network Error';
-      throw new Error(errorData.error || `Failed to fetch products: ${status}`);
-    }
-
-    const data = await productsResult.value.json();
-    const rawProducts = Array.isArray(data) ? data : [];
-
-    // Determine inventory data availability
-    let inventoryList: any[] = [];
-    let isInventoryReady = false;
-
-    if (inventoryResult.status === 'fulfilled' && Array.isArray(inventoryResult.value)) {
-      inventoryList = inventoryResult.value;
-      isInventoryReady = true;
-    } else {
-      console.warn('Inventory fetch could not be fulfilled directly; checking inventory cache');
-      const cached = getInventory();
-      if (Array.isArray(cached) && cached.length > 0) {
-        inventoryList = cached;
-        isInventoryReady = true;
-      }
-    }
-
-    // Merge inventory stock levels for linked items
-    const mappedProducts = rawProducts.map((p: any) => {
-      const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
-        ? p.inventoryLinkIds
-        : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
-
-      if (linkIds.length > 0) {
-        if (isInventoryReady) {
-          const availableStock = calculateAvailableServings(p, inventoryList);
-          return { 
-            ...p, 
-            stock: availableStock, 
-            inventoryLinkId: linkIds[0] || null, 
-            inventoryLinkIds: linkIds 
-          };
-        } else {
-          // If inventory API failed and no cache is available, do not silently wipe stock to 0.
-          // Preserve existing product stock so items are not falsely displayed as Out of Stock.
-          return {
-            ...p,
-            inventoryLinkId: linkIds[0] || null,
-            inventoryLinkIds: linkIds
-          };
-        }
-      }
-      return p;
-    });
-
-    cachedProducts = mappedProducts;
-    isCacheLoaded = true;
-
-    return mappedProducts;
-  } catch (error) {
-    console.error('Error in fetchProducts API:', error);
-    // Return cached products if available
+  // Return cached products if within TTL and not forcing refresh or filtered
+  if (!hasFilters && !isForceRefresh && isCacheLoaded && (Date.now() - cacheTimestamp < PRODUCT_CACHE_TTL_MS)) {
     return cachedProducts;
   }
+
+  // If a request without filters is already in-flight, share the exact same promise
+  if (!hasFilters && !isForceRefresh && pendingProductsPromise) {
+    return pendingProductsPromise;
+  }
+
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const params = new URLSearchParams();
+      if (filters?.category && filters.category !== 'All') params.append('category', filters.category);
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.availableOnly) params.append('availableOnly', 'true');
+
+      const url = `/api/products${params.toString() ? `?${params.toString()}` : ''}`;
+
+      // Concurrently fetch products and ensure inventory is fully loaded from backend
+      const [productsResult, inventoryResult] = await Promise.allSettled([
+        fetch(url, { headers: getAuthHeaders(), signal: controller.signal }),
+        fetchInventory({ forceRefresh: isForceRefresh })
+      ]);
+
+      if (productsResult.status !== 'fulfilled' || !productsResult.value.ok) {
+        const errorData = productsResult.status === 'fulfilled'
+          ? await productsResult.value.json().catch(() => ({}))
+          : {};
+        const status = productsResult.status === 'fulfilled' ? productsResult.value.status : 'Network Error';
+        throw new Error(errorData.error || `Failed to fetch products: ${status}`);
+      }
+
+      const data = await productsResult.value.json();
+      const rawProducts = Array.isArray(data) ? data : [];
+
+      // Determine inventory data availability
+      let inventoryList: any[] = [];
+      let isInventoryReady = false;
+
+      if (inventoryResult.status === 'fulfilled' && Array.isArray(inventoryResult.value)) {
+        inventoryList = inventoryResult.value;
+        isInventoryReady = true;
+      } else {
+        console.warn('Inventory fetch could not be fulfilled directly; checking inventory cache');
+        const cached = getInventory();
+        if (Array.isArray(cached) && cached.length > 0) {
+          inventoryList = cached;
+          isInventoryReady = true;
+        }
+      }
+
+      // Merge inventory stock levels for linked items
+      const mappedProducts = rawProducts.map((p: any) => {
+        const linkIds: string[] = Array.isArray(p.inventoryLinkIds) && p.inventoryLinkIds.length > 0
+          ? p.inventoryLinkIds
+          : (p.inventoryLinkId ? [p.inventoryLinkId] : []);
+
+        if (linkIds.length > 0) {
+          if (isInventoryReady) {
+            const availableStock = calculateAvailableServings(p, inventoryList);
+            return { 
+              ...p, 
+              stock: availableStock, 
+              inventoryLinkId: linkIds[0] || null, 
+              inventoryLinkIds: linkIds 
+            };
+          } else {
+            // If inventory API failed and no cache is available, do not silently wipe stock to 0.
+            // Preserve existing product stock so items are not falsely displayed as Out of Stock.
+            return {
+              ...p,
+              inventoryLinkId: linkIds[0] || null,
+              inventoryLinkIds: linkIds
+            };
+          }
+        }
+        return p;
+      });
+
+      if (!hasFilters) {
+        cachedProducts = mappedProducts;
+        isCacheLoaded = true;
+        cacheTimestamp = Date.now();
+      }
+
+      return mappedProducts;
+    } catch (error) {
+      console.error('Error in fetchProducts API:', error);
+      // Return cached products if available
+      return cachedProducts;
+    } finally {
+      clearTimeout(timeoutId);
+      pendingProductsPromise = null;
+    }
+  })();
+
+  if (!hasFilters && !isForceRefresh) {
+    pendingProductsPromise = promise;
+  }
+
+  return promise;
 };
 
 // Async API: Get single product by ID
@@ -261,6 +302,8 @@ export const createProduct = async (newProduct: any): Promise<any> => {
 
   const created = data.product || data;
   cachedProducts.push(created);
+  cacheTimestamp = Date.now();
+  isCacheLoaded = true;
   return created;
 };
 
@@ -291,6 +334,8 @@ export const editProduct = async (id: number | string, updatedData: any): Promis
 
   const updated = data.product || data;
   cachedProducts = cachedProducts.map(p => (p.id === Number(id) || p.id === id ? updated : p));
+  cacheTimestamp = Date.now();
+  isCacheLoaded = true;
   return updated;
 };
 
@@ -307,6 +352,7 @@ export const removeProduct = async (id: number | string): Promise<any> => {
   }
 
   cachedProducts = cachedProducts.filter(p => p.id !== Number(id) && p.id !== id);
+  cacheTimestamp = Date.now();
   return data;
 };
 

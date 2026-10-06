@@ -17,7 +17,8 @@ import {
   KeyRound,
   ShieldCheck,
   Check,
-  X
+  X,
+  Clock
 } from 'lucide-react';
 
 const LoginPage = () => {
@@ -28,6 +29,8 @@ const LoginPage = () => {
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutRemainingSeconds, setLockoutRemainingSeconds] = useState(0);
 
   // Forgot Password Multi-Step State
   // Step 1 = Enter Email
@@ -77,6 +80,38 @@ const LoginPage = () => {
   const from = location.state?.from?.pathname || null;
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Format lockout countdown time (e.g., "9m 42s" or "25s")
+  const formatLockoutTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+    }
+    return `${secs}s`;
+  };
+
+  // Live countdown for login lockout
+  useEffect(() => {
+    if (lockoutRemainingSeconds <= 0) {
+      if (isLocked) {
+        setIsLocked(false);
+      }
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setLockoutRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          setIsLocked(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [lockoutRemainingSeconds, isLocked]);
 
   // Timer countdown for resending OTP
   useEffect(() => {
@@ -284,6 +319,11 @@ const LoginPage = () => {
     setError('');
     setInfoMsg('');
 
+    if (isLocked && lockoutRemainingSeconds > 0) {
+      setError(`Too many failed sign-in attempts. Your sign-in is temporarily locked for security.`);
+      return;
+    }
+
     const cleanEmail = signInEmail.trim();
     if (!cleanEmail) {
       setError('Please enter your email address.');
@@ -300,7 +340,14 @@ const LoginPage = () => {
       const user = await login(cleanEmail, signInPassword);
       handleRedirect(user);
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password.');
+      if (err.isLocked || err.status === 429) {
+        setIsLocked(true);
+        const remSec = typeof err.remainingSeconds === 'number' && err.remainingSeconds > 0 ? err.remainingSeconds : 600;
+        setLockoutRemainingSeconds(remSec);
+        setError(err.message || 'Too many failed sign-in attempts. Your sign-in is temporarily locked for security.');
+      } else {
+        setError(err.message || 'Invalid email or password.');
+      }
     } finally {
       setLoading(false);
     }
@@ -509,7 +556,15 @@ const LoginPage = () => {
                 className="bg-red-50 text-red-700 p-3.5 rounded-lg mb-5 text-xs font-bold border border-red-200 flex items-start gap-2.5"
               >
                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                <span className="leading-relaxed">{error}</span>
+                <div className="space-y-1.5 flex-1">
+                  <p className="leading-relaxed">{error}</p>
+                  {isLocked && lockoutRemainingSeconds > 0 && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100/90 border border-red-300 rounded-md text-red-800 font-extrabold text-[11px]">
+                      <Clock size={12} className="shrink-0 text-red-600" />
+                      <span>Try again in {formatLockoutTime(lockoutRemainingSeconds)}</span>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
             
@@ -575,8 +630,9 @@ const LoginPage = () => {
                       id="signin-password-input"
                       value={signInPassword}
                       onChange={(e) => setSignInPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full bg-white border border-gray-300 p-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400"
+                      placeholder={isLocked && lockoutRemainingSeconds > 0 ? "Sign-in locked temporarily" : "Enter your password"}
+                      disabled={isLocked && lockoutRemainingSeconds > 0}
+                      className="w-full bg-white border border-gray-300 p-2.5 pl-10 pr-10 rounded-lg focus:outline-none focus:border-dark transition-colors font-medium text-dark text-sm placeholder:text-gray-400 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                       required
                     />
                     <button 
@@ -604,11 +660,16 @@ const LoginPage = () => {
                 <button 
                   type="submit" 
                   id="signin-submit-btn"
-                  disabled={loading}
-                  className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={loading || (isLocked && lockoutRemainingSeconds > 0)}
+                  className="w-full bg-dark text-white py-3 rounded-lg hover:bg-primary font-bold text-xs uppercase tracking-wider transition-colors mt-4 active:translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {loading ? (
                     <RefreshCw size={16} className="animate-spin" />
+                  ) : isLocked && lockoutRemainingSeconds > 0 ? (
+                    <>
+                      <Lock size={14} />
+                      <span>Locked ({formatLockoutTime(lockoutRemainingSeconds)})</span>
+                    </>
                   ) : (
                     <>
                       <span>Sign In</span>

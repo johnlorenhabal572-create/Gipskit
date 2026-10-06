@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Edit2, X, Link as LinkIcon, Image as ImageIcon, Upload, Loader2, Tag, FolderPlus, FolderMinus, Search, Utensils, MoreVertical } from 'lucide-react';
 import { IMAGES } from '../constants/images';
 import { formatPrice } from '../utils/format';
+import { CustomSelect } from '../components/CustomSelect';
 
 const ManageMenu = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -481,21 +482,23 @@ const ManageMenu = () => {
                     <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">
                       Select Category to Remove *
                     </label>
-                    <select
+                    <CustomSelect
                       value={categoryToDelete}
-                      onChange={(e) => setCategoryToDelete(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark bg-white cursor-pointer"
-                    >
-                      <option value="" disabled>-- Select a category --</option>
-                      {categories.map(cat => {
-                        const count = products.filter(p => p.category && p.category.toLowerCase() === cat.toLowerCase()).length;
-                        return (
-                          <option key={cat} value={cat}>
-                            {cat} ({count} {count === 1 ? 'item' : 'items'})
-                          </option>
-                        );
-                      })}
-                    </select>
+                      onChange={(val) => setCategoryToDelete(val)}
+                      options={[
+                        { value: '', label: '-- Select a category --', disabled: true },
+                        ...categories.map(cat => {
+                          const count = products.filter(p => p.category && p.category.toLowerCase() === cat.toLowerCase()).length;
+                          return {
+                            value: cat,
+                            label: `${cat} (${count} ${count === 1 ? 'item' : 'items'})`
+                          };
+                        })
+                      ]}
+                      className="w-full"
+                      triggerClassName="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs font-semibold text-dark bg-white cursor-pointer"
+                      placeholder="-- Select a category --"
+                    />
                   </div>
 
                   {categoryToDelete && (
@@ -595,15 +598,14 @@ const ManageMenu = () => {
                         + New Category
                       </button>
                     </div>
-                    <select 
+                    <CustomSelect 
                       value={formData.category}
-                      onChange={(e) => setFormData({...formData, category: e.target.value})}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setFormData({...formData, category: val})}
+                      options={categories.map(cat => ({ value: cat, label: cat }))}
+                      className="w-full"
+                      triggerClassName="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-dark text-xs bg-white font-semibold text-dark cursor-pointer"
+                      placeholder="Select a category"
+                    />
                   </div>
 
                   {/* Product Description Input */}
@@ -955,19 +957,16 @@ const ManageMenu = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Category:</span>
-              <select 
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-transparent text-xs font-bold text-dark focus:outline-none cursor-pointer"
-              >
-                <option value="All">All Categories ({products.length})</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+            <CustomSelect 
+              labelPrefix="Category:"
+              value={selectedCategory}
+              onChange={(val) => setSelectedCategory(val)}
+              options={[
+                { value: 'All', label: `All Categories (${products.length})` },
+                ...categories.map(cat => ({ value: cat, label: cat }))
+              ]}
+              triggerClassName="bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-dark hover:border-dark focus:outline-none cursor-pointer"
+            />
 
             {selectedCategory !== 'All' && (
               <button

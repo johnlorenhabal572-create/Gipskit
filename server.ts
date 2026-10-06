@@ -372,6 +372,8 @@ async function startServer() {
           status: 'Active',
           createdAt: now.toISOString(),
           lastLogin: now.toISOString(),
+          failedLoginAttempts: 0,
+          lockoutUntil: null as string | null,
           loginHistory: [{
             timestamp: now.toISOString(),
             ip: clientIp,
@@ -425,8 +427,102 @@ async function startServer() {
         matchedUser = memoryStore.users.find(u => u.email === email);
       }
 
-      // Check password (supports hashed passwords as well as legacy plaintext)
-      if (!matchedUser || !verifyPassword(password, matchedUser.password)) {
+      // If account does not exist, return generic error (do not reveal email existence)
+      if (!matchedUser) {
+        return res.status(401).json({ error: 'Invalid email address or password. Please try again.' });
+      }
+
+      const nowTime = Date.now();
+      const lockoutUntilMs = matchedUser.lockoutUntil ? new Date(matchedUser.lockoutUntil).getTime() : 0;
+
+      // 1. Check lockout BEFORE password verification
+      if (lockoutUntilMs > nowTime) {
+        const remainingSeconds = Math.max(1, Math.ceil((lockoutUntilMs - nowTime) / 1000));
+        return res.status(429).json({
+          error: 'Too many failed sign-in attempts. Your sign-in is temporarily locked for security.',
+          isLocked: true,
+          remainingSeconds,
+          lockoutUntil: matchedUser.lockoutUntil
+        });
+      }
+
+      // 2. When lockout expires, reset failedLoginAttempts to 0 and clear lockoutUntil
+      if (lockoutUntilMs > 0 && lockoutUntilMs <= nowTime) {
+        if (isConnected) {
+          await User.updateOne(
+            { email },
+            { $set: { failedLoginAttempts: 0, lockoutUntil: null } }
+          );
+        } else {
+          matchedUser.failedLoginAttempts = 0;
+          matchedUser.lockoutUntil = null;
+        }
+        matchedUser.failedLoginAttempts = 0;
+        matchedUser.lockoutUntil = null;
+      }
+
+      // 3. Verify password (supports hashed passwords as well as legacy plaintext)
+      const isPasswordValid = verifyPassword(password, matchedUser.password);
+
+      if (!isPasswordValid) {
+        const lockoutDurationMs = 10 * 60 * 1000; // exactly 10 minutes
+        const lockoutUntilTime = new Date(Date.now() + lockoutDurationMs);
+
+        let currentAttempts = (matchedUser.failedLoginAttempts || 0) + 1;
+        let activeLockout: Date | string | null = null;
+
+        if (isConnected) {
+          // Atomic MongoDB pipeline update: increments counter and triggers lockout on 10th attempt
+          const updatedDoc: any = await User.findOneAndUpdate(
+            { email },
+            [
+              {
+                $set: {
+                  failedLoginAttempts: { $add: [{ $ifNull: ['$failedLoginAttempts', 0] }, 1] }
+                }
+              },
+              {
+                $set: {
+                  lockoutUntil: {
+                    $cond: {
+                      if: { $gte: ['$failedLoginAttempts', 10] },
+                      then: { $ifNull: ['$lockoutUntil', lockoutUntilTime] },
+                      else: null
+                    }
+                  }
+                }
+              }
+            ],
+            { updatePipeline: true, returnDocument: 'after' } as any
+          );
+
+          if (updatedDoc) {
+            currentAttempts = updatedDoc.failedLoginAttempts || 0;
+            activeLockout = updatedDoc.lockoutUntil || null;
+          }
+        } else {
+          matchedUser.failedLoginAttempts = (matchedUser.failedLoginAttempts || 0) + 1;
+          if (matchedUser.failedLoginAttempts >= 10) {
+            if (!matchedUser.lockoutUntil) {
+              matchedUser.lockoutUntil = lockoutUntilTime.toISOString();
+            }
+            activeLockout = matchedUser.lockoutUntil;
+          }
+          currentAttempts = matchedUser.failedLoginAttempts;
+        }
+
+        // 10th invalid attempt (or above): 429 lockout
+        if (currentAttempts >= 10 && activeLockout) {
+          const remainingSeconds = Math.max(1, Math.ceil((new Date(activeLockout).getTime() - Date.now()) / 1000));
+          return res.status(429).json({
+            error: 'Too many failed sign-in attempts. Your sign-in is temporarily locked for security.',
+            isLocked: true,
+            remainingSeconds,
+            lockoutUntil: activeLockout
+          });
+        }
+
+        // Attempts 1-9: generic 401 response without revealing remaining attempts
         return res.status(401).json({ error: 'Invalid email address or password. Please try again.' });
       }
 
@@ -453,7 +549,7 @@ async function startServer() {
         }
       }
 
-      // Record login history and update last login
+      // Record login history, update last login, and reset failedLoginAttempts
       const now = new Date();
       const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
       const userAgent = req.headers['user-agent'] || 'Web Browser';
@@ -465,6 +561,8 @@ async function startServer() {
       };
 
       if (isConnected && matchedUser.save) {
+        matchedUser.failedLoginAttempts = 0;
+        matchedUser.lockoutUntil = null;
         matchedUser.lastLogin = now;
         if (!matchedUser.loginHistory) matchedUser.loginHistory = [];
         matchedUser.loginHistory.unshift(newActivity);
@@ -473,6 +571,8 @@ async function startServer() {
         }
         await matchedUser.save();
       } else if (matchedUser) {
+        matchedUser.failedLoginAttempts = 0;
+        matchedUser.lockoutUntil = null;
         matchedUser.lastLogin = now.toISOString();
         if (!matchedUser.loginHistory) matchedUser.loginHistory = [];
         matchedUser.loginHistory.unshift({
@@ -736,6 +836,8 @@ async function startServer() {
           status,
           createdAt: now.toISOString(),
           lastLogin: now.toISOString(),
+          failedLoginAttempts: 0,
+          lockoutUntil: null as string | null,
           loginHistory: [{
             timestamp: now.toISOString(),
             ip: '127.0.0.1',

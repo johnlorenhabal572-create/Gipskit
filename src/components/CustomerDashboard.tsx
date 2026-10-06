@@ -268,6 +268,7 @@ export const CustomerDashboard = () => {
   const [addedItemNotice, setAddedItemNotice] = useState<string | null>(null);
 
   const carouselRef = useRef<HTMLDivElement>(null);
+  const isFetchingRef = useRef(false);
 
   // Find exact matching account in AuthContext.accounts for registration & last login timestamps
   const currentAccount = useMemo(() => {
@@ -279,44 +280,75 @@ export const CustomerDashboard = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const loadDashboardData = async () => {
-      try {
-        if (!user?.email) return;
-
-        const [ordersData, productsData] = await Promise.all([
-          fetchOrders({ email: user.email }),
-          fetchProducts()
-        ]);
-
+    // Initial load: fetches customer orders and catalog products independently
+    const loadInitialData = async () => {
+      if (!user?.email) {
         if (isMounted) {
-          if (Array.isArray(ordersData)) {
-            setCustomerOrders(ordersData);
-          }
-          if (Array.isArray(productsData)) {
+          setLoading(false);
+        }
+        return;
+      }
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      if (isMounted) {
+        setLoading(true);
+      }
+
+      // Fetch products in the background independently without blocking Current Orders
+      fetchProducts()
+        .then((productsData) => {
+          if (isMounted && Array.isArray(productsData)) {
             setCatalogProducts(productsData);
           }
+        })
+        .catch((err) => {
+          console.error('Failed to load catalog products:', err);
+        });
+
+      try {
+        const ordersData = await fetchOrders({ email: user.email });
+        if (isMounted && Array.isArray(ordersData)) {
+          setCustomerOrders(ordersData);
         }
       } catch (err) {
-        console.error('Failed to load dashboard data:', err);
+        console.error('Failed to load dashboard orders:', err);
       } finally {
+        isFetchingRef.current = false;
         if (isMounted) {
           setLoading(false);
         }
       }
     };
 
-    loadDashboardData();
+    // Periodic poll: polls ONLY customer orders every 5 seconds
+    const pollOrders = async () => {
+      if (isFetchingRef.current || !user?.email) return;
+      isFetchingRef.current = true;
 
-    // Re-check periodically when tab is active to refresh order tracker
+      try {
+        const ordersData = await fetchOrders({ email: user.email });
+        if (isMounted && Array.isArray(ordersData)) {
+          setCustomerOrders(ordersData);
+        }
+      } catch (err) {
+        console.error('Failed to poll customer orders:', err);
+      } finally {
+        isFetchingRef.current = false;
+      }
+    };
+
+    loadInitialData();
+
+    // Re-check periodically when tab is active: poll customer orders ONLY every 5 seconds
     const interval = setInterval(() => {
       if (document.visibilityState !== 'hidden') {
-        loadDashboardData();
+        pollOrders();
       }
-    }, 20000);
+    }, 5000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadDashboardData();
+        pollOrders();
       }
     };
 

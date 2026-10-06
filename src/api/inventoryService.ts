@@ -23,21 +23,36 @@ export const getAuthHeaders = (): Record<string, string> => {
   return headers;
 };
 
-// In-memory runtime cache (no localStorage dependency for permanent storage)
+// In-memory runtime cache with 10-second TTL
 let cachedInventory: any[] = [];
 let isCacheLoaded = false;
+let cacheTimestamp = 0;
+const INVENTORY_CACHE_TTL_MS = 10000; // 10 seconds
 let pendingInventoryPromise: Promise<any[]> | null = null;
 
+export const invalidateInventoryCache = () => {
+  cacheTimestamp = 0;
+};
+
 // 1. Fetch all inventory items from MongoDB Atlas via REST API
-export const fetchInventory = async (filters?: { search?: string; lowStock?: boolean }): Promise<any[]> => {
+export const fetchInventory = async (filters?: { search?: string; lowStock?: boolean; forceRefresh?: boolean }): Promise<any[]> => {
   const hasFilters = Boolean(filters?.search || filters?.lowStock);
+  const isForceRefresh = Boolean(filters?.forceRefresh);
+
+  // Return cached inventory if within TTL and not forcing refresh or filtered
+  if (!hasFilters && !isForceRefresh && isCacheLoaded && (Date.now() - cacheTimestamp < INVENTORY_CACHE_TTL_MS)) {
+    return cachedInventory;
+  }
 
   // If a request without filters is already in-flight, share the exact same promise
-  if (!hasFilters && pendingInventoryPromise) {
+  if (!hasFilters && !isForceRefresh && pendingInventoryPromise) {
     return pendingInventoryPromise;
   }
 
   const promise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       const params = new URLSearchParams();
       if (filters?.search) params.append('search', filters.search);
@@ -45,7 +60,8 @@ export const fetchInventory = async (filters?: { search?: string; lowStock?: boo
 
       const url = `/api/inventory${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await fetch(url, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        signal: controller.signal
       });
 
       if (!res.ok) {
@@ -58,6 +74,7 @@ export const fetchInventory = async (filters?: { search?: string; lowStock?: boo
       if (!hasFilters) {
         cachedInventory = items;
         isCacheLoaded = true;
+        cacheTimestamp = Date.now();
       }
       return items;
     } catch (error) {
@@ -67,13 +84,12 @@ export const fetchInventory = async (filters?: { search?: string; lowStock?: boo
       }
       throw error;
     } finally {
-      if (!hasFilters) {
-        pendingInventoryPromise = null;
-      }
+      clearTimeout(timeoutId);
+      pendingInventoryPromise = null;
     }
   })();
 
-  if (!hasFilters) {
+  if (!hasFilters && !isForceRefresh) {
     pendingInventoryPromise = promise;
   }
 
@@ -156,6 +172,8 @@ export const createInventoryItem = async (newItem: any): Promise<any> => {
 
   const created = data.item || data;
   cachedInventory.push(created);
+  cacheTimestamp = Date.now();
+  isCacheLoaded = true;
   return created;
 };
 
@@ -174,6 +192,8 @@ export const updateInventoryItem = async (id: string, updatedData: any): Promise
 
   const updated = data.item || data;
   cachedInventory = cachedInventory.map(i => (i.id === id ? updated : i));
+  cacheTimestamp = Date.now();
+  isCacheLoaded = true;
   return updated;
 };
 
@@ -201,6 +221,8 @@ export const adjustInventoryStock = async (
 
   if (data.item) {
     cachedInventory = cachedInventory.map(i => (i.id === id ? data.item : i));
+    cacheTimestamp = Date.now();
+    isCacheLoaded = true;
   }
   return data;
 };
@@ -218,6 +240,7 @@ export const deleteInventoryItem = async (id: string): Promise<any> => {
   }
 
   cachedInventory = cachedInventory.filter(i => i.id !== id);
+  cacheTimestamp = Date.now();
   return data;
 };
 

@@ -51,6 +51,8 @@ export const memoryStore = {
       status: 'Active',
       createdAt: new Date().toISOString(),
       lastLogin: new Date().toISOString(),
+      failedLoginAttempts: 0,
+      lockoutUntil: null as string | null,
       loginHistory: [
         {
           timestamp: new Date().toISOString(),
